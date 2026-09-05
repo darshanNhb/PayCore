@@ -76,6 +76,33 @@ export default function PayslipsPage() {
       .includes(search.toLowerCase())
   );
 
+  const handleExportCsv = () => {
+    if (payslips.length === 0) {
+      alert("No payslips available to export.");
+      return;
+    }
+    const headers = ["Employee Code", "Employee Name", "Department", "Role", "Period", "Gross Salary", "Total Deductions", "Net Pay", "Status"];
+    const rows = payslips.map((p) => [
+      `"${p.employee.code}"`,
+      `"${p.employee.name}"`,
+      `"${p.employee.department}"`,
+      `"${p.employee.role}"`,
+      `"${p.period}"`,
+      p.grossSalary,
+      p.totalDeductions,
+      p.netPay,
+      `"${p.status}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Payroll_Register_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <>
       <div className="page-head">
@@ -86,7 +113,7 @@ export default function PayslipsPage() {
         </div>
         <button
           className="secondary"
-          onClick={() => alert("Exporting payroll register...")}
+          onClick={handleExportCsv}
         >
           <Download size={17} /> Export register
         </button>
@@ -231,7 +258,7 @@ export default function PayslipsPage() {
             <footer>
               <button
                 className="secondary"
-                onClick={() => alert("Downloading password-protected PDF payslip...")}
+                onClick={() => window.open(`/api/payroll/payslips/${selectedPayslip.id}/pdf`, "_blank")}
               >
                 <Download size={16} /> Download protected PDF
               </button>
