@@ -10,15 +10,18 @@ export async function GET(req: NextRequest) {
     const session = await requireSession();
     const { searchParams } = new URL(req.url);
 
-    const employeeId = searchParams.get("employeeId");
+    let employeeId = searchParams.get("employeeId");
     const from = searchParams.get("from");
     const to = searchParams.get("to");
     const status = searchParams.get("status");
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "50")));
 
-    if (session.role === "EMPLOYEE" && (!employeeId || session.employeeId !== employeeId)) {
-      return NextResponse.json({ error: { code: "FORBIDDEN", message: "Forbidden" } }, { status: 403 });
+    if (session.role === "EMPLOYEE") {
+      if (!session.employeeId) {
+        return NextResponse.json({ error: { code: "FORBIDDEN", message: "User is not linked to an employee profile" } }, { status: 403 });
+      }
+      employeeId = session.employeeId;
     }
 
     const where: any = { deletedAt: null };

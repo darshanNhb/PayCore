@@ -72,3 +72,47 @@ export async function PATCH(
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: error.message } }, { status: 500 });
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireSession();
+    requirePermission(session.role, "attendance", "delete");
+    const { id } = await params;
+
+    const existing = await prisma.attendanceRecord.findUnique({
+      where: { id, deletedAt: null },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Attendance record not found" } }, { status: 404 });
+    }
+
+    await prisma.attendanceRecord.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+
+    await writeAuditLog({
+      actorUserId: session.userId,
+      entityType: "AttendanceRecord",
+      entityId: id,
+      action: "DELETE",
+      beforeJson: { checkIn: existing.checkIn, checkOut: existing.checkOut, status: existing.status },
+      ipAddress: getClientIp(req),
+      userAgent: getClientUserAgent(req),
+    });
+
+    return NextResponse.json({ data: { message: "Attendance record deleted" } });
+  } catch (error: any) {
+    if (error.message === "UNAUTHENTICATED") {
+      return NextResponse.json({ error: { code: "UNAUTHENTICATED", message: "Not logged in" } }, { status: 401 });
+    }
+    if (error.statusCode === 403) {
+      return NextResponse.json({ error: { code: "FORBIDDEN", message: error.message } }, { status: 403 });
+    }
+    return NextResponse.json({ error: { code: "SERVER_ERROR", message: error.message } }, { status: 500 });
+  }
+}
