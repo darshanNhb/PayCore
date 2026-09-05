@@ -8,7 +8,8 @@ import { writeAuditLog, getClientIp, getClientUserAgent } from "@/lib/utils/audi
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
+    requirePermission(session.role, "salary_structure", "read");
     const structures = await prisma.salaryStructure.findMany({
       where: { status: "ACTIVE" },
       include: {
@@ -22,6 +23,9 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     if (error.message === "UNAUTHENTICATED") {
       return NextResponse.json({ error: { code: "UNAUTHENTICATED", message: "Not logged in" } }, { status: 401 });
+    }
+    if (error.statusCode === 403) {
+      return NextResponse.json({ error: { code: "FORBIDDEN", message: error.message } }, { status: 403 });
     }
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: error.message } }, { status: 500 });
   }

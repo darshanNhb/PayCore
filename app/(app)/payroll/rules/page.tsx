@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Calculator, Check, AlertCircle } from "lucide-react";
+import { Plus, Calculator, Check, AlertCircle, Trash2, Pencil } from "lucide-react";
 import { StatusPill } from "@/components/ui/status-pill";
 
 interface SalaryRuleItem {
@@ -24,7 +24,8 @@ export default function SalaryRulesPage() {
   const [structures, setStructures] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedStructureId, setSelectedStructureId] = useState("");
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingRule, setEditingRule] = useState<SalaryRuleItem | null>(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -40,6 +41,38 @@ export default function SalaryRulesPage() {
   });
   const [formulaTest, setFormulaTest] = useState<{ valid?: boolean; result?: number; error?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const openModal = (rule?: SalaryRuleItem) => {
+    if (rule) {
+      setEditingRule(rule);
+      setForm({
+        name: rule.name,
+        code: rule.code,
+        category: rule.category,
+        computationMethod: rule.computationMethod,
+        sequence: rule.sequence,
+        fixedAmount: rule.fixedAmount?.toString() || "",
+        percentageOfRuleCode: rule.percentageOfRuleCode || "",
+        percentageValue: rule.percentageValue?.toString() || "",
+        formulaExpression: rule.formulaExpression || "",
+      });
+    } else {
+      setEditingRule(null);
+      setForm({
+        name: "House rent allowance",
+        code: "HRA",
+        category: "ALLOWANCE",
+        computationMethod: "PERCENTAGE_OF_RULE",
+        sequence: 20,
+        fixedAmount: "",
+        percentageOfRuleCode: "BASIC",
+        percentageValue: "50",
+        formulaExpression: "BASIC * 0.5",
+      });
+    }
+    setFormulaTest(null);
+    setShowModal(true);
+  };
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -88,7 +121,7 @@ export default function SalaryRulesPage() {
     }
   };
 
-  const handleCreateRule = async (e: React.FormEvent) => {
+  const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
@@ -110,23 +143,41 @@ export default function SalaryRulesPage() {
         payload.formulaExpression = form.formulaExpression;
       }
 
-      const res = await fetch("/api/payroll/rules", {
-        method: "POST",
+      const url = editingRule ? `/api/payroll/rules/${editingRule.id}` : "/api/payroll/rules";
+      const method = editingRule ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error?.message || "Failed to create rule");
+        throw new Error(data.error?.message || "Failed to save rule");
       }
 
-      setIsModalOpen(false);
+      setShowModal(false);
+      setEditingRule(null);
       loadData();
     } catch (err: any) {
       alert(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete the rule "${name}"?`)) return;
+    try {
+      const res = await fetch(`/api/payroll/rules/${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "Failed to delete");
+      loadData();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
@@ -138,7 +189,7 @@ export default function SalaryRulesPage() {
           <h1>Salary rules</h1>
           <p>Reusable calculations that flow into payslips.</p>
         </div>
-        <button className="primary" onClick={() => setIsModalOpen(true)}>
+        <button className="primary" onClick={() => openModal()}>
           <Plus size={17} /> New rule
         </button>
       </div>
@@ -177,6 +228,7 @@ export default function SalaryRulesPage() {
                 <th>Computation</th>
                 <th>Calculation Details</th>
                 <th>Status</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -203,6 +255,26 @@ export default function SalaryRulesPage() {
                   <td>
                     <StatusPill status={r.active ? "ACTIVE" : "INACTIVE"} />
                   </td>
+                  <td>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        className="secondary"
+                        style={{ padding: "4px 8px", display: "flex", alignItems: "center" }}
+                        onClick={() => openModal(r)}
+                        title="Edit rule"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        className="danger-btn"
+                        style={{ padding: "4px 8px" }}
+                        onClick={() => handleDelete(r.id, r.name)}
+                        title="Delete rule"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -210,12 +282,12 @@ export default function SalaryRulesPage() {
         )}
       </div>
 
-      {isModalOpen && (
+      {showModal && (
         <div className="modal-back">
           <section className="modal">
-            <span className="eyebrow">NEW SALARY RULE</span>
-            <h2>Create Salary Rule</h2>
-            <form onSubmit={handleCreateRule} style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
+            <span className="eyebrow">{editingRule ? "EDIT" : "NEW"} SALARY RULE</span>
+            <h2>{editingRule ? "Edit" : "Create"} Salary Rule</h2>
+            <form onSubmit={handleSaveRule} style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
               <div className="form-grid">
                 <label>
                   Rule name *
@@ -339,11 +411,11 @@ export default function SalaryRulesPage() {
               </p>
 
               <footer>
-                <button type="button" className="secondary" onClick={() => setIsModalOpen(false)}>
+                <button type="button" className="secondary" onClick={() => setShowModal(false)}>
                   Cancel
                 </button>
                 <button type="submit" className="primary" disabled={submitting}>
-                  {submitting ? "Saving..." : "Save rule"}
+                  {submitting ? "Saving..." : editingRule ? "Save changes" : "Create rule"}
                 </button>
               </footer>
             </form>
