@@ -62,7 +62,24 @@ Security is baked into every route and API endpoint using the following hierarch
 2.  **`HR_PAYROLL_MANAGER`**: Can create payruns, modify salary structures, and validate payroll.
 3.  **`HR_PAYROLL_USER`**: Can view payroll and attendance data, but cannot validate or execute payments.
 4.  **`HR_MANAGER`**: Can manage employees and approve leave, but cannot access payroll data.
-5.  **`EMPLOYEE`**: Restricted entirely to the `/portal`. Can only view their own data, payslips, and requests.
+6.  **`EMPLOYEE`**: Restricted entirely to the `/portal`. Can only view their own data, payslips, and requests.
+
+---
+
+## 🧠 System Philosophy
+
+**PayCore** is built around three core principles:
+
+1. **Automated over Manual**: If it can be calculated, it should be. Leaves are automatically deducted from payruns; users are automatically provisioned when employees are onboarded.
+2. **Calm Design System**: Enterprise software doesn't have to be overwhelming. PayCore uses a minimalist, low-contrast aesthetic (with a beautiful dark mode) to keep HR professionals focused and stress-free.
+3. **Security by Default**: Sensitive fields like bank accounts and PAN details are encrypted at rest using AES-256-GCM. Brute-force attacks on the login portal are thwarted via Redis sliding-window rate limiters.
+
+## 🚫 What PayCore Does NOT Cover
+
+To keep the system fast and focused, PayCore specifically excludes:
+- **Applicant Tracking (ATS)**: We manage employees *after* they are hired. We do not handle resumes, interview pipelines, or job postings.
+- **Corporate Accounting**: While we generate payruns and net pay totals, we do not handle ledger accounting, invoicing, or company tax filing.
+- **Expense Management**: PayCore handles structured payroll allowances, but it is not a general expense receipt tracking system.
 
 ---
 
@@ -117,12 +134,21 @@ pnpm install
 ```
 
 ### 2. Environment Variables
-Create a `.env` file in the `paycore/` directory:
+Create a `.env` file in the root `paycore/` directory. PayCore requires a few specific environment variables to function correctly:
+
 ```env
-# Database connection string
+# Database connection string (Required)
+# Points to your PostgreSQL instance.
 DATABASE_URL="postgresql://postgres:password@localhost:5432/paycore?schema=public"
 
-# Optional: Add any secret keys for JWT or encryption if implemented later
+# Redis Connection (Required for rate-limiting)
+# We use Upstash Redis for login rate-limiting to prevent brute force attacks.
+UPSTASH_REDIS_REST_URL="https://your-upstash-url.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="your-upstash-token"
+
+# Authentication Secrets (Required)
+# Used for encrypting session cookies and hashing.
+JWT_SECRET="generate-a-secure-random-string-here"
 ```
 
 ### 3. Database Initialization
@@ -153,6 +179,13 @@ When the database is seeded or an employee is created manually, the backend auto
 To log in, use the details of any employee created:
 - **Email**: The employee's `workEmail` (e.g., `admin@paycore.in`)
 - **Password**: `PayCore_<FirstName>` (e.g., `PayCore_Admin`)
+
+---
+
+## 🤝 Contributing
+We welcome issues and pull requests! The landscape of payroll compliance and HR management evolves rapidly.
+
+If you are adding new features, please ensure you update the Prisma schema and run `npx prisma format` before opening a pull request. For major architectural changes, please open an issue first to discuss the proposed implementation.
 
 ---
 
