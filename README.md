@@ -1,34 +1,91 @@
-# PayCore
+<div align="center">
+  <img src="https://via.placeholder.com/120x120/4338CA/ffffff?text=PayCore" alt="PayCore Logo" width="120" />
+  <h1>PayCore</h1>
+  <p><em>The calm operating system for people and pay.</em></p>
+</div>
 
-> The calm operating system for people and pay.
+---
 
-PayCore is a modern, comprehensive HR and Payroll Management System designed to simplify the complexities of running a business. Built with a sleek, premium interface and powerful backend automation, PayCore handles everything from employee onboarding and attendance tracking to automated payroll processing and payslip generation.
+PayCore is a comprehensive, modern HR and Payroll Management System designed to simplify the complexities of running a business. Built with a sleek, premium interface and powerful backend automation, PayCore handles everything from employee onboarding and attendance tracking to automated payroll processing and payslip generation.
 
-## ✨ Features
+## 📋 Table of Contents
+- [✨ Core Features](#-core-features)
+- [🏢 Module Deep Dive](#-module-deep-dive)
+  - [1. Employee Directory](#1-employee-directory)
+  - [2. Automated Payroll Engine](#2-automated-payroll-engine)
+  - [3. Time & Attendance](#3-time--attendance)
+  - [4. Role-Based Access Control](#4-role-based-access-control-rbac)
+- [🏗️ Technical Architecture](#-technical-architecture)
+- [🚀 Tech Stack](#-tech-stack)
+- [💻 Development Setup](#-development-setup)
+- [🔒 Default Credentials](#-default-credentials)
+- [📄 License](#-license)
 
-### 👥 Core HR & Employee Directory
-- **Employee Lifecycle Management**: Seamlessly onboard new hires, track personal details, and manage job positions and departments.
-- **Contract Management**: Track active, expired, and draft contracts with historical tracking and compensation details.
-- **Smart Profiles**: Dedicated, beautiful profile pages for each employee displaying their timeline, manager hierarchy, and bank details.
+---
 
-### 💰 Automated Payroll Engine
-- **Salary Structures & Rules**: Define custom salary formulas and rules (Basic, HRA, Provident Fund, Tax Deductions) tailored to your company's policy.
-- **Dynamic Payruns**: Generate batch payruns with one click. PayCore automatically computes net pay based on active contracts, attendance exceptions, and leave days.
-- **PDF Payslips**: Automatically generate pixel-perfect PDF payslips for employees that they can download instantly from their portal.
+## ✨ Core Features
 
-### ⏰ Time & Attendance
-- **Self-Service Check-in**: Employees can punch in and out from their dedicated portal, complete with a live timer.
-- **Leave Management**: Define leave types, grant allocations, and allow employees to request time off.
-- **Manager Approvals**: Role-based access allows HR and Managers to approve or reject time-off requests with real-time balance validation.
+- **Automated Payroll**: Run batch payrolls with one click, automatically adjusting for leave, attendance, and dynamic salary rules.
+- **Smart Onboarding**: Employee profiles are automatically provisioned with secure portal access upon creation.
+- **Self-Service Portal**: Employees can check in/out, download payslips, and request leave without accessing the administrative UI.
+- **Real-Time Analytics**: Dashboard KPIs reflecting real-time headcount, payroll expenses, and system alerts.
+- **Audit Logging**: Comprehensive, immutable tracking of sensitive actions (e.g., creating employees, updating contracts, computing payruns).
+- **Light/Dark Mode**: Built-in CSS variable design system seamlessly adapting to system preferences.
 
-### 🔐 Security & Access
-- **Role-Based Access Control (RBAC)**: Fine-grained permissions for Administrators, HR Managers, Payroll Users, and Employees.
-- **Employee Portal**: A restricted, beautifully designed self-service portal for employees to view their own data, download payslips, and request time off without accessing the admin dashboard.
-- **Audit Logging**: Comprehensive tracking of sensitive actions (like creating employees or editing contracts) for compliance.
+---
 
-### 🎨 Premium Aesthetics
-- **Light & Dark Mode**: True CSS-variable based theme support, dynamically adapting to user preferences.
-- **Dynamic Dashboards**: Real-time KPI tracking, actionable severity alerts, and interactive charts.
+## 🏢 Module Deep Dive
+
+### 1. Employee Directory
+The Employee module is the central source of truth for your workforce.
+*   **Lifecycle Management**: Tracks an employee from `ACTIVE` to `ON_LEAVE` or `TERMINATED`.
+*   **Contract Management**: Handles multiple contracts per employee (Draft, Running, Expired) with detailed compensation breakdowns (Wage, Allowances, Deductions).
+*   **Organization Chart**: Tracks Reporting Managers and hierarchical structures.
+*   **Bank & Statutory**: Securely encrypts and stores sensitive details like Bank Account numbers, IFSC codes, and PAN details.
+
+### 2. Automated Payroll Engine
+PayCore completely automates the traditional payroll workflow:
+*   **Salary Structures**: Define parent structures (e.g., "Standard Indian Payroll") that apply to groups of employees.
+*   **Dynamic Salary Rules**: Define custom formulas (e.g., `Basic = Wage * 0.5`, `HRA = Basic * 0.4`) and map them to structures.
+*   **Batch Payruns**: Generate a Payrun for a specific period (e.g., Sept 2026). The system automatically fetches all `RUNNING` contracts, calculates rules, deducts unpaid leave, and generates draft payslips.
+*   **PDF Generation**: Instantly renders pixel-perfect PDF payslips using `@react-pdf/renderer` directly from the browser.
+
+### 3. Time & Attendance
+*   **Live Check-In/Out**: Employees use the Portal to punch their time. The system calculates active duration and stores daily attendance logs.
+*   **Leave Types & Allocations**: Define configurable leave types (Sick, Casual, Earned) and allocate days to specific employees.
+*   **Leave Workflow**: Employees submit requests (e.g., Half-day Sick Leave) which route to HR/Managers for `APPROVED` or `REFUSED` states.
+*   **Payroll Integration**: Unpaid leaves automatically sync with the Payroll Engine to deduct pay during the monthly Payrun.
+
+### 4. Role-Based Access Control (RBAC)
+Security is baked into every route and API endpoint using the following hierarchy:
+1.  **`ADMIN`**: Full system access, including User management and company configuration.
+2.  **`HR_PAYROLL_MANAGER`**: Can create payruns, modify salary structures, and validate payroll.
+3.  **`HR_PAYROLL_USER`**: Can view payroll and attendance data, but cannot validate or execute payments.
+4.  **`HR_MANAGER`**: Can manage employees and approve leave, but cannot access payroll data.
+5.  **`EMPLOYEE`**: Restricted entirely to the `/portal`. Can only view their own data, payslips, and requests.
+
+---
+
+## 🏗️ Technical Architecture
+
+### Folder Structure (Next.js App Router)
+```text
+paycore/
+├── app/
+│   ├── (app)/           # Authenticated Admin/HR routes (Dashboard, Employees, Payroll)
+│   ├── (auth)/          # Public routes (Login, Forgot Password)
+│   ├── api/             # RESTful Next.js API Routes
+│   ├── portal/          # Employee Self-Service Portal
+│   ├── layout.tsx       # Root layout with ThemeProvider
+│   └── globals.css      # Core design system & CSS Variables
+├── components/          # Reusable UI components (Modals, Tables, Avatars)
+├── lib/                 # Core utilities
+│   ├── auth/            # Session validation, password hashing, RBAC permissions
+│   ├── db/              # Prisma client instantiation
+│   └── utils/           # Audit logging, encryption, formatting
+├── prisma/              # Database schema (schema.prisma) and migrations
+└── scripts/             # Database seeders and maintenance scripts
+```
 
 ---
 
@@ -41,58 +98,59 @@ PayCore is a modern, comprehensive HR and Payroll Management System designed to 
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **PDF Generation**: `@react-pdf/renderer`
 - **Themes**: `next-themes`
+- **Validation**: `zod`
 
 ---
 
-## 🛠️ Getting Started
+## 💻 Development Setup
 
 ### Prerequisites
 - Node.js 20+
-- `pnpm` package manager
-- A running PostgreSQL instance
+- `pnpm` (Package manager)
+- PostgreSQL (Local or managed, e.g., Supabase/Neon)
 
-### Installation
+### 1. Clone & Install
+```bash
+git clone https://github.com/darshanNhb/PayCore.git
+cd PayCore/paycore
+pnpm install
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/darshanNhb/PayCore.git
-   cd PayCore/paycore
-   ```
+### 2. Environment Variables
+Create a `.env` file in the `paycore/` directory:
+```env
+# Database connection string
+DATABASE_URL="postgresql://postgres:password@localhost:5432/paycore?schema=public"
 
-2. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
+# Optional: Add any secret keys for JWT or encryption if implemented later
+```
 
-3. **Configure Environment Variables**
-   Create a `.env` file in the root directory:
-   ```env
-   DATABASE_URL="postgresql://user:password@localhost:5432/paycore?schema=public"
-   # Add any other required secrets
-   ```
+### 3. Database Initialization
+Push the Prisma schema to your database and generate the client:
+```bash
+npx prisma generate
+npx prisma db push
+```
 
-4. **Initialize Database**
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   ```
+### 4. Seed the Database
+To populate the database with realistic dummy data (Employees, Departments, Leave Allocations, etc.):
+```bash
+npx tsx scripts/seed-leave.ts
+npx tsx scripts/fix-missing-users.ts
+```
 
-5. **Seed the Database (Optional but recommended)**
-   ```bash
-   npx tsx scripts/seed-leave.ts
-   npx tsx scripts/fix-missing-users.ts
-   ```
-
-6. **Start the Development Server**
-   ```bash
-   pnpm dev
-   ```
-   Navigate to `http://localhost:3000` to view the application.
+### 5. Run the Server
+```bash
+pnpm dev
+```
+Navigate to `http://localhost:3000`.
 
 ---
 
 ## 🔒 Default Credentials
-When the database is seeded or an employee is created manually, the system automatically provisions a user account:
+When the database is seeded or an employee is created manually, the backend automatically provisions a User account linked to that Employee. 
+
+To log in, use the details of any employee created:
 - **Email**: The employee's `workEmail` (e.g., `admin@paycore.in`)
 - **Password**: `PayCore_<FirstName>` (e.g., `PayCore_Admin`)
 
