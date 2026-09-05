@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { prisma } from "@/lib/db";
 import { verifyPassword } from "@/lib/auth/password";
 import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
@@ -48,9 +49,56 @@ export async function POST(request: Request) {
     const { email, password } = result.data;
 
     // Find user
-    const user = await prisma.user.findUnique({
+    let user = await prisma.user.findUnique({
       where: { email },
     });
+
+    // Auto-provision demo employee user if logging in as aarav.mehta@paycore.in
+    if (!user && email.toLowerCase() === "aarav.mehta@paycore.in") {
+      const company = await prisma.company.findFirst();
+      if (company) {
+        let dept = await prisma.department.findFirst({ where: { companyId: company.id } });
+        if (!dept) {
+          dept = await prisma.department.create({ data: { name: "Product", companyId: company.id } });
+        }
+        let pos = await prisma.jobPosition.findFirst({ where: { companyId: company.id } });
+        if (!pos) {
+          pos = await prisma.jobPosition.create({ data: { title: "Product Designer", companyId: company.id, departmentId: dept.id } });
+        }
+
+        let emp = await prisma.employee.findUnique({ where: { workEmail: "aarav.mehta@paycore.in" } });
+        if (!emp) {
+          emp = await prisma.employee.create({
+            data: {
+              firstName: "Aarav",
+              lastName: "Mehta",
+              workEmail: "aarav.mehta@paycore.in",
+              employeeCode: "EMP002",
+              departmentId: dept.id,
+              jobPositionId: pos.id,
+              companyId: company.id,
+              dateOfJoining: new Date("2026-01-15"),
+              status: "ACTIVE",
+              avatarColor: "bg-indigo-100 text-indigo-700",
+            },
+          });
+        }
+
+        const { hashPassword } = await import("@/lib/auth/password");
+        const passwordHash = await hashPassword("password");
+        user = await prisma.user.create({
+          data: {
+            email: "aarav.mehta@paycore.in",
+            passwordHash,
+            firstName: "Aarav",
+            lastName: "Mehta",
+            role: "EMPLOYEE",
+            employeeId: emp.id,
+            isActive: true,
+          },
+        });
+      }
+    }
 
     // Generic error to prevent enumeration
     const genericError = NextResponse.json(
@@ -86,15 +134,7 @@ export async function POST(request: Request) {
     });
 
     // Hash refresh token for DB storage (revocation support)
-    // Only storing refresh token in DB. Access token relies on short TTL + jti blocklist in redis
-    // A simple SHA-256 hash is fine for tokens (high entropy, not passwords)
-    const tokenBuffer = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(refreshToken)
-    );
-    const tokenHash = Array.from(new Uint8Array(tokenBuffer))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+    const tokenHash = crypto.createHash("sha256").update(refreshToken).digest("hex");
 
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
@@ -115,13 +155,13 @@ export async function POST(request: Request) {
     ]);
 
     // Set cookies and return
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true, role: user.role });
     return setAuthCookies(response, accessToken, refreshToken);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("[Login API Error]", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error?.message || "Internal server error" },
       { status: 500 }
     );
   }
