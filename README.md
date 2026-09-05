@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://via.placeholder.com/120x120/4338CA/ffffff?text=PayCore" alt="PayCore Logo" width="120" />
+  
   <h1>PayCore</h1>
   <p><em>The calm operating system for people and pay.</em></p>
 </div>
