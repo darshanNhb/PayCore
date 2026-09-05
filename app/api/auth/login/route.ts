@@ -48,57 +48,9 @@ export async function POST(request: Request) {
 
     const { email, password } = result.data;
 
-    // Find user
-    let user = await prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { email },
     });
-
-    // Auto-provision demo employee user if logging in as aarav.mehta@paycore.in
-    if (!user && email.toLowerCase() === "aarav.mehta@paycore.in") {
-      const company = await prisma.company.findFirst();
-      if (company) {
-        let dept = await prisma.department.findFirst({ where: { companyId: company.id } });
-        if (!dept) {
-          dept = await prisma.department.create({ data: { name: "Product", companyId: company.id } });
-        }
-        let pos = await prisma.jobPosition.findFirst({ where: { companyId: company.id } });
-        if (!pos) {
-          pos = await prisma.jobPosition.create({ data: { title: "Product Designer", companyId: company.id, departmentId: dept.id } });
-        }
-
-        let emp = await prisma.employee.findUnique({ where: { workEmail: "aarav.mehta@paycore.in" } });
-        if (!emp) {
-          emp = await prisma.employee.create({
-            data: {
-              firstName: "Aarav",
-              lastName: "Mehta",
-              workEmail: "aarav.mehta@paycore.in",
-              employeeCode: "EMP002",
-              departmentId: dept.id,
-              jobPositionId: pos.id,
-              companyId: company.id,
-              dateOfJoining: new Date("2026-01-15"),
-              status: "ACTIVE",
-              avatarColor: "bg-indigo-100 text-indigo-700",
-            },
-          });
-        }
-
-        const { hashPassword } = await import("@/lib/auth/password");
-        const passwordHash = await hashPassword("password");
-        user = await prisma.user.create({
-          data: {
-            email: "aarav.mehta@paycore.in",
-            passwordHash,
-            firstName: "Aarav",
-            lastName: "Mehta",
-            role: "EMPLOYEE",
-            employeeId: emp.id,
-            isActive: true,
-          },
-        });
-      }
-    }
 
     // Generic error to prevent enumeration
     const genericError = NextResponse.json(
@@ -155,7 +107,12 @@ export async function POST(request: Request) {
     ]);
 
     // Set cookies and return
-    const response = NextResponse.json({ success: true, role: user.role });
+    const response = NextResponse.json({ 
+      success: true, 
+      role: user.role,
+      accessToken,
+      refreshToken
+    });
     return setAuthCookies(response, accessToken, refreshToken);
 
   } catch (error: any) {

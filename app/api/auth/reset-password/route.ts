@@ -1,95 +1,76 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { resetPasswordSchema } from "@/lib/validation/auth";
 import { hashPassword } from "@/lib/auth/password";
-import { writeAuditLog, getClientIp, getClientUserAgent } from "@/lib/utils/audit";
+import { z } from "zod";
+import { Redis } from "@upstash/redis";
 
+const redis = Redis.fromEnv();
+
+const schema = z.object({
+  email: z.string().email(),
+  otp: z.string().length(6),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Verifies OTP from Redis and updates the user's password.
+ */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const result = resetPasswordSchema.safeParse(body);
-    
-    if (!result.success) {
-      return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
-    }
+    const { email, otp, newPassword } = schema.parse(body);
+    const normalizedEmail = email.toLowerCase();
 
-    const { token, password } = result.data;
+    // Get stored OTP from Redis
+    const otpKey = `password_reset_otp:${normalizedEmail}`;
+    const storedOtp = await redis.get(otpKey);
 
-    // Hash the raw token to find it in DB
-    const tokenBuffer = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(token)
-    );
-    const tokenHash = Array.from(new Uint8Array(tokenBuffer))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-
-    // Find token in DB
-    const resetToken = await prisma.passwordResetToken.findFirst({
-      where: {
-        tokenHash,
-        usedAt: null,
-      },
-      include: { user: true },
-    });
-
-    if (!resetToken) {
+    if (!storedOtp || String(storedOtp) !== String(otp)) {
       return NextResponse.json(
-        { error: "Invalid or expired reset token." },
+        { error: "Invalid or expired code. Please try again." },
         { status: 400 }
       );
     }
 
-    if (resetToken.expiresAt < new Date()) {
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
       return NextResponse.json(
-        { error: "Reset token has expired. Please request a new one." },
-        { status: 400 }
+        { error: "User not found" },
+        { status: 404 }
       );
     }
 
-    const { user } = resetToken;
-    const newPasswordHash = await hashPassword(password);
+    // Hash new password and update
+    const passwordHash = await hashPassword(newPassword);
 
-    // Transaction: update password, mark token used, revoke all existing sessions
-    await prisma.$transaction([
-      // Update password
-      prisma.user.update({
-        where: { id: user.id },
-        data: { 
-          passwordHash: newPasswordHash,
-          mustChangePassword: false, 
-        },
-      }),
-      // Mark token used
-      prisma.passwordResetToken.update({
-        where: { id: resetToken.id },
-        data: { usedAt: new Date() },
-      }),
-      // Revoke ALL refresh tokens for this user
-      prisma.refreshToken.updateMany({
-        where: { userId: user.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-    ]);
-
-    // Audit log
-    await writeAuditLog({
-      actorUserId: user.id,
-      entityType: "User",
-      entityId: user.id,
-      action: "PASSWORD_RESET",
-      ipAddress: getClientIp(request),
-      userAgent: getClientUserAgent(request),
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
     });
 
-    // NOTE: Access tokens will still be valid until their TTL expires (~15 min).
-    // In a very strict system, we would broadcast a redis event to blacklist all current jtis for this user,
-    // but typically letting the short TTL expire is acceptable when revoking all refresh tokens.
+    // Delete the OTP from Redis (one-time use)
+    await redis.del(otpKey);
 
-    return NextResponse.json({ success: true });
+    // Also clear rate limit
+    await redis.del(`otp_rate:${normalizedEmail}`);
 
-  } catch (error) {
-    console.error("[Reset Password API Error]", error);
+    return NextResponse.json({
+      success: true,
+      message: "Password updated successfully. You can now sign in.",
+    });
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return NextResponse.json(
+        { error: error.errors[0]?.message || "Invalid input" },
+        { status: 400 }
+      );
+    }
+    console.error("[Reset Password Error]", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

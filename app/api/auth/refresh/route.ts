@@ -4,10 +4,21 @@ import { prisma } from "@/lib/db";
 import { REFRESH_TOKEN_COOKIE, setAuthCookies, clearAuthCookies } from "@/lib/auth/session";
 import { verifyRefreshToken, signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
-    const cookieStore = await cookies();
-    const refreshTokenStr = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
+    let refreshTokenStr: string | undefined;
+    
+    try {
+      const body = await req.json();
+      refreshTokenStr = body.refreshToken;
+    } catch {
+      // Ignore JSON parse error, fallback to cookies
+    }
+
+    if (!refreshTokenStr) {
+      const cookieStore = await cookies();
+      refreshTokenStr = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
+    }
 
     if (!refreshTokenStr) {
       return NextResponse.json({ error: "No refresh token" }, { status: 401 });
@@ -119,7 +130,11 @@ export async function POST() {
     ]);
 
     // 8. Return
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({ 
+      success: true,
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
+    });
     return setAuthCookies(response, newAccessToken, newRefreshToken);
 
   } catch (error) {
