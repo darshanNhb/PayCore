@@ -250,19 +250,27 @@ export default function LeaveRequestsPage() {
               <dd>{selected.reason}</dd>
               <dt>Allocation used</dt>
               <dd>
-                <b>FY 2026 {selected.type}</b> · 11 days remaining
+                {selected.allocation ? (
+                  <>
+                    <b>{selected.type}</b> · {selected.allocation.allocatedAmount - selected.allocation.takenAmount} days remaining
+                  </>
+                ) : (
+                  <><b>{selected.type}</b> · No allocation required</>
+                )}
               </dd>
             </dl>
 
-            <div className="balance">
-              <div>
-                <b>11 of 20 days</b>
-                <span>remaining after approval</span>
+            {selected.allocation && (
+              <div className="balance">
+                <div>
+                  <b>{selected.allocation.allocatedAmount - selected.allocation.takenAmount} of {selected.allocation.allocatedAmount} days</b>
+                  <span>remaining</span>
+                </div>
+                <div className="bar">
+                  <i style={{ width: `${(selected.allocation.takenAmount / selected.allocation.allocatedAmount) * 100}%` }} />
+                </div>
               </div>
-              <div className="bar">
-                <i style={{ width: "45%" }} />
-              </div>
-            </div>
+            )}
 
             <ApprovalTimeline
               requesterName={selected.employee}

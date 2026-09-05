@@ -67,6 +67,10 @@ export async function GET(req: NextRequest) {
       reason: r.reason || "Personal",
       decisionNote: r.decisionNote,
       createdAt: r.createdAt,
+      allocation: r.allocation ? {
+        allocatedAmount: Number(r.allocation.allocatedAmount),
+        takenAmount: Number(r.allocation.takenAmount)
+      } : null,
     }));
 
     return NextResponse.json({ data: formatted });
