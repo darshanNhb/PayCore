@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PayCore
 
-## Getting Started
+> The calm operating system for people and pay.
 
-First, run the development server:
+PayCore is a modern, comprehensive HR and Payroll Management System designed to simplify the complexities of running a business. Built with a sleek, premium interface and powerful backend automation, PayCore handles everything from employee onboarding and attendance tracking to automated payroll processing and payslip generation.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## ✨ Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 👥 Core HR & Employee Directory
+- **Employee Lifecycle Management**: Seamlessly onboard new hires, track personal details, and manage job positions and departments.
+- **Contract Management**: Track active, expired, and draft contracts with historical tracking and compensation details.
+- **Smart Profiles**: Dedicated, beautiful profile pages for each employee displaying their timeline, manager hierarchy, and bank details.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 💰 Automated Payroll Engine
+- **Salary Structures & Rules**: Define custom salary formulas and rules (Basic, HRA, Provident Fund, Tax Deductions) tailored to your company's policy.
+- **Dynamic Payruns**: Generate batch payruns with one click. PayCore automatically computes net pay based on active contracts, attendance exceptions, and leave days.
+- **PDF Payslips**: Automatically generate pixel-perfect PDF payslips for employees that they can download instantly from their portal.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### ⏰ Time & Attendance
+- **Self-Service Check-in**: Employees can punch in and out from their dedicated portal, complete with a live timer.
+- **Leave Management**: Define leave types, grant allocations, and allow employees to request time off.
+- **Manager Approvals**: Role-based access allows HR and Managers to approve or reject time-off requests with real-time balance validation.
 
-## Learn More
+### 🔐 Security & Access
+- **Role-Based Access Control (RBAC)**: Fine-grained permissions for Administrators, HR Managers, Payroll Users, and Employees.
+- **Employee Portal**: A restricted, beautifully designed self-service portal for employees to view their own data, download payslips, and request time off without accessing the admin dashboard.
+- **Audit Logging**: Comprehensive tracking of sensitive actions (like creating employees or editing contracts) for compliance.
 
-To learn more about Next.js, take a look at the following resources:
+### 🎨 Premium Aesthetics
+- **Light & Dark Mode**: True CSS-variable based theme support, dynamically adapting to user preferences.
+- **Dynamic Dashboards**: Real-time KPI tracking, actionable severity alerts, and interactive charts.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🚀 Tech Stack
 
-## Deploy on Vercel
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
+- **Language**: TypeScript
+- **Database ORM**: [Prisma](https://www.prisma.io/)
+- **Styling**: Vanilla CSS (CSS Variables) + Tailwind Utility Classes
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **PDF Generation**: `@react-pdf/renderer`
+- **Themes**: `next-themes`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🛠️ Getting Started
+
+### Prerequisites
+- Node.js 20+
+- `pnpm` package manager
+- A running PostgreSQL instance
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/darshanNhb/PayCore.git
+   cd PayCore/paycore
+   ```
+
+2. **Install dependencies**
+   ```bash
+   pnpm install
+   ```
+
+3. **Configure Environment Variables**
+   Create a `.env` file in the root directory:
+   ```env
+   DATABASE_URL="postgresql://user:password@localhost:5432/paycore?schema=public"
+   # Add any other required secrets
+   ```
+
+4. **Initialize Database**
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
+
+5. **Seed the Database (Optional but recommended)**
+   ```bash
+   npx tsx scripts/seed-leave.ts
+   npx tsx scripts/fix-missing-users.ts
+   ```
+
+6. **Start the Development Server**
+   ```bash
+   pnpm dev
+   ```
+   Navigate to `http://localhost:3000` to view the application.
+
+---
+
+## 🔒 Default Credentials
+When the database is seeded or an employee is created manually, the system automatically provisions a user account:
+- **Email**: The employee's `workEmail` (e.g., `admin@paycore.in`)
+- **Password**: `PayCore_<FirstName>` (e.g., `PayCore_Admin`)
+
+---
+
+## 📝 License
+This project is licensed under the MIT License - see the LICENSE file for details.
