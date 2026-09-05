@@ -24,8 +24,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow unauthenticated access to the login/reset pages themselves
-  if (pathname === "/login" || pathname === "/forgot-password" || pathname === "/reset-password" || pathname === "/signup") {
+  // Allow unauthenticated access to public pages
+  if (pathname === "/" || pathname === "/login" || pathname === "/forgot-password" || pathname === "/reset-password" || pathname === "/signup") {
     // If they have a token and try to go to login, redirect to appropriate landing page
     const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
     if (accessToken) {
@@ -43,8 +43,14 @@ export async function middleware(request: NextRequest) {
   }
 
   // 2. Check for token
-  const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
-  const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+  let accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
+  let refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value;
+
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    accessToken = authHeader.substring(7);
+    // If using Bearer tokens, we don't necessarily have the refresh token in cookies
+  }
 
   const isApiRoute = pathname.startsWith("/api/");
   const loginUrl = new URL("/login", request.url);

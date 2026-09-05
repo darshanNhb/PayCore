@@ -71,6 +71,7 @@ const HR_MANAGER_PERMISSIONS: Permission[] = [
   "working_schedule:delete",
   "attendance:read",
   "attendance:update", // manual corrections
+  "attendance:delete",
   "time_off_type:create",
   "time_off_type:read",
   "time_off_type:update",
