@@ -4,16 +4,18 @@ import { useState, useEffect } from "react";
 import { Modal } from "@/components/ui/modal";
 import { DepartmentOption, JobPositionOption, EmployeeListItem } from "./types";
 
-interface NewEmployeeModalProps {
+interface EditEmployeeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  employee: any;
 }
 
-export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModalProps) {
+export function EditEmployeeModal({ isOpen, onClose, onSuccess, employee }: EditEmployeeModalProps) {
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [jobPositions, setJobPositions] = useState<JobPositionOption[]>([]);
   const [managers, setManagers] = useState<EmployeeListItem[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,22 +25,50 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
     workEmail: "",
     personalEmail: "",
     phone: "",
-    dateOfJoining: new Date().toISOString().split("T")[0],
+    dateOfBirth: "",
+    workLocation: "",
     departmentId: "",
     jobPositionId: "",
     managerId: "",
+    workingScheduleId: "",
     employeeType: "FULL_TIME",
     status: "ACTIVE",
-    workLocation: "Bengaluru, India",
     bankAccountNumber: "",
     bankIfsc: "",
     pan: "",
   });
 
+  // Pre-fill form with employee data when modal opens
+  useEffect(() => {
+    if (!isOpen || !employee) return;
+
+    setFormData({
+      firstName: employee.firstName || "",
+      lastName: employee.lastName || "",
+      workEmail: employee.workEmail || "",
+      personalEmail: employee.personalEmail || "",
+      phone: employee.phone || "",
+      dateOfBirth: employee.dateOfBirth ? employee.dateOfBirth.split("T")[0] : "",
+      workLocation: employee.workLocation || "",
+      departmentId: employee.departmentId || employee.department?.id || "",
+      jobPositionId: employee.jobPositionId || employee.jobPosition?.id || "",
+      managerId: employee.managerId || "",
+      workingScheduleId: employee.workingScheduleId || employee.workingSchedule?.id || "",
+      employeeType: employee.employeeType || "FULL_TIME",
+      status: employee.status || "ACTIVE",
+      // Raw values are only available to HR/Admin; otherwise leave blank
+      bankAccountNumber: employee.rawBank || "",
+      bankIfsc: employee.bankIfsc || "",
+      pan: employee.rawPan || "",
+    });
+
+    setError(null);
+  }, [isOpen, employee]);
+
+  // Load master data for dropdowns
   useEffect(() => {
     if (!isOpen) return;
 
-    // Load master data for dropdowns
     fetch("/api/departments")
       .then((res) => res.json())
       .then((d) => d.data && setDepartments(d.data))
@@ -53,6 +83,11 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
       .then((res) => res.json())
       .then((d) => d.data && setManagers(d.data))
       .catch(() => {});
+
+    fetch("/api/working-schedules")
+      .then((res) => res.json())
+      .then((d) => d.data && setSchedules(d.data))
+      .catch(() => {});
   }, [isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,26 +96,34 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
     setSubmitting(true);
 
     try {
-      const payload = {
-        ...formData,
-        dateOfJoining: new Date(formData.dateOfJoining).toISOString(),
-        managerId: formData.managerId || null,
+      const payload: any = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        workEmail: formData.workEmail,
         personalEmail: formData.personalEmail || null,
         phone: formData.phone || null,
+        dateOfBirth: formData.dateOfBirth || null,
+        workLocation: formData.workLocation || null,
+        departmentId: formData.departmentId,
+        jobPositionId: formData.jobPositionId,
+        managerId: formData.managerId || null,
+        workingScheduleId: formData.workingScheduleId || null,
+        employeeType: formData.employeeType,
+        status: formData.status,
         bankAccountNumber: formData.bankAccountNumber || null,
         bankIfsc: formData.bankIfsc || null,
         pan: formData.pan || null,
       };
 
-      const res = await fetch("/api/employees", {
-        method: "POST",
+      const res = await fetch(`/api/employees/${employee.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error?.message || "Failed to create employee");
+        throw new Error(data.error?.message || "Failed to update employee");
       }
 
       onSuccess();
@@ -96,8 +139,11 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
     ? jobPositions.filter((p) => !p.departmentId || p.departmentId === formData.departmentId)
     : jobPositions;
 
+  // Filter out current employee from manager list
+  const availableManagers = managers.filter((m) => m.id !== employee?.id);
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="New Employee">
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit Employee">
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
         {error && (
           <div style={{ padding: "10px", background: "#FEF2F2", color: "#B91C1C", borderRadius: "6px", fontSize: "13px" }}>
@@ -105,6 +151,7 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
           </div>
         )}
 
+        {/* ── Personal Info ── */}
         <div className="form-grid">
           <label>
             First name *
@@ -112,7 +159,6 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
               required
               value={formData.firstName}
               onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              placeholder="e.g. Aarav"
             />
           </label>
           <label>
@@ -121,7 +167,6 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
               required
               value={formData.lastName}
               onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              placeholder="e.g. Mehta"
             />
           </label>
         </div>
@@ -134,18 +179,41 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
               type="email"
               value={formData.workEmail}
               onChange={(e) => setFormData({ ...formData, workEmail: e.target.value })}
-              placeholder="e.g. aarav.mehta@paycore.in"
             />
           </label>
           <label>
-            Date of joining *
+            Personal email
             <input
-              required
-              type="date"
-              value={formData.dateOfJoining}
-              onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })}
+              type="email"
+              value={formData.personalEmail}
+              onChange={(e) => setFormData({ ...formData, personalEmail: e.target.value })}
+              placeholder="e.g. personal@gmail.com"
             />
           </label>
+        </div>
+
+        <div className="form-grid">
+          <label>
+            Phone
+            <input
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="e.g. +91 98765 43210"
+            />
+          </label>
+          <label>
+            Date of birth
+            <input
+              type="date"
+              value={formData.dateOfBirth}
+              onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+            />
+          </label>
+        </div>
+
+        {/* ── Work Info ── */}
+        <div style={{ borderTop: "1px solid #E7E5E4", paddingTop: "12px" }}>
+          <b style={{ fontSize: "13px", color: "#1C1917" }}>Work Information</b>
         </div>
 
         <div className="form-grid">
@@ -186,29 +254,35 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
               onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
             >
               <option value="">No manager (Top level)</option>
-              {managers.map((m) => (
+              {availableManagers.map((m) => (
                 <option key={m.id} value={m.id}>{m.name} ({m.department})</option>
               ))}
             </select>
           </label>
 
           <label>
-            System Role *
+            Working schedule
             <select
-              required
-              value={(formData as any).systemRole || "EMPLOYEE"}
-              onChange={(e) => setFormData({ ...formData, systemRole: e.target.value as any })}
+              value={formData.workingScheduleId}
+              onChange={(e) => setFormData({ ...formData, workingScheduleId: e.target.value })}
             >
-              <option value="EMPLOYEE">Employee (Portal Only)</option>
-              <option value="HR_MANAGER">HR Manager</option>
-              <option value="HR_PAYROLL_USER">HR Payroll User</option>
-              <option value="HR_PAYROLL_MANAGER">HR Payroll Manager</option>
-              <option value="ADMIN">Administrator</option>
+              <option value="">No schedule</option>
+              {schedules.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
             </select>
           </label>
         </div>
 
         <div className="form-grid">
+          <label>
+            Work location
+            <input
+              value={formData.workLocation}
+              onChange={(e) => setFormData({ ...formData, workLocation: e.target.value })}
+              placeholder="e.g. Bengaluru, India"
+            />
+          </label>
           <label>
             Employment type
             <select
@@ -223,8 +297,25 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
           </label>
         </div>
 
+        <label>
+          Status
+          <select
+            value={formData.status}
+            onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+          >
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="ON_LEAVE">On Leave</option>
+            <option value="TERMINATED">Terminated</option>
+          </select>
+        </label>
+
+        {/* ── Bank & Statutory ── */}
         <div style={{ borderTop: "1px solid #E7E5E4", paddingTop: "12px" }}>
-          <b style={{ fontSize: "13px", color: "#1C1917" }}>Bank & Statutory Details (Optional)</b>
+          <b style={{ fontSize: "13px", color: "#1C1917" }}>Bank &amp; Statutory Details</b>
+          <p style={{ fontSize: "12px", color: "#78716C", marginTop: "2px" }}>
+            Bank details are verified automatically when both account number and IFSC are provided.
+          </p>
         </div>
 
         <div className="form-grid">
@@ -260,7 +351,7 @@ export function NewEmployeeModal({ isOpen, onClose, onSuccess }: NewEmployeeModa
             Cancel
           </button>
           <button type="submit" className="primary" disabled={submitting}>
-            {submitting ? "Creating..." : "Create employee"}
+            {submitting ? "Saving..." : "Save changes"}
           </button>
         </div>
       </form>

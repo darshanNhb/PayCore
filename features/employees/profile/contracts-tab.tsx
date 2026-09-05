@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { StatusPill } from "@/components/ui/status-pill";
 import { formatCurrency } from "@/lib/utils/format";
 import { NewContractModal } from "./new-contract-modal";
+import { EditContractModal } from "@/features/contracts/edit-contract-modal";
 
 interface ContractsTabProps {
   employee: any;
@@ -13,7 +14,25 @@ interface ContractsTabProps {
 
 export function ContractsTab({ employee, onRefresh }: ContractsTabProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingContract, setEditingContract] = useState<any>(null);
   const contracts = employee.contracts || [];
+
+  const handleActivate = async (contractId: string) => {
+    try {
+      const res = await fetch(`/api/contracts/${contractId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "RUNNING" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || "Failed to activate contract");
+      }
+      onRefresh();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   return (
     <>
@@ -39,6 +58,7 @@ export function ContractsTab({ employee, onRefresh }: ContractsTabProps) {
                 <th>End date</th>
                 <th>Wage / month</th>
                 <th>Status</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -71,6 +91,27 @@ export function ContractsTab({ employee, onRefresh }: ContractsTabProps) {
                   <td>
                     <StatusPill status={c.status} />
                   </td>
+                  <td>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      {c.status === "DRAFT" && (
+                        <button
+                          className="secondary"
+                          style={{ padding: "4px 8px", fontSize: "12px" }}
+                          onClick={() => handleActivate(c.id)}
+                        >
+                          Activate
+                        </button>
+                      )}
+                      <button
+                        className="secondary"
+                        style={{ padding: "4px 8px", fontSize: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}
+                        onClick={() => setEditingContract(c)}
+                        title="Edit contract"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -85,6 +126,16 @@ export function ContractsTab({ employee, onRefresh }: ContractsTabProps) {
         employeeId={employee.id}
         defaultDepartmentId={employee.departmentId}
         defaultJobPositionId={employee.jobPositionId}
+      />
+
+      <EditContractModal
+        isOpen={!!editingContract}
+        onClose={() => setEditingContract(null)}
+        onSuccess={() => {
+          setEditingContract(null);
+          onRefresh();
+        }}
+        contract={editingContract}
       />
     </>
   );

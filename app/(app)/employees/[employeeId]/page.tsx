@@ -11,6 +11,7 @@ import { AttendanceTab } from "@/features/employees/profile/attendance-tab";
 import { LeaveTab } from "@/features/employees/profile/leave-tab";
 import { PayrollTab } from "@/features/employees/profile/payroll-tab";
 import { DocumentsTab } from "@/features/employees/profile/documents-tab";
+import { EditEmployeeModal } from "@/features/employees/edit-employee-modal";
 
 interface EmployeeProfilePageProps {
   params: Promise<{ employeeId: string }>;
@@ -27,6 +28,7 @@ export default function EmployeeProfilePage({ params }: EmployeeProfilePageProps
   });
   const [tab, setTab] = useState("Overview");
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
 
   const loadData = useCallback(() => {
     setLoading(true);
@@ -93,7 +95,7 @@ export default function EmployeeProfilePage({ params }: EmployeeProfilePageProps
           </div>
         </div>
 
-        <button className="secondary" onClick={() => alert("Edit employee feature")}>
+        <button className="secondary" onClick={() => setEditOpen(true)}>
           Edit employee
         </button>
 
@@ -149,6 +151,13 @@ export default function EmployeeProfilePage({ params }: EmployeeProfilePageProps
       {tab === "Leave" && <LeaveTab employee={employee} />}
       {tab === "Payroll" && <PayrollTab employee={employee} />}
       {tab === "Documents" && <DocumentsTab />}
+
+      <EditEmployeeModal
+        isOpen={editOpen}
+        onClose={() => setEditOpen(false)}
+        onSuccess={loadData}
+        employee={employee}
+      />
     </>
   );
 }
