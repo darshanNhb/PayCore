@@ -32,24 +32,26 @@ export default function OverviewPage() {
   }, []);
 
   const kpis = data?.kpis || {
-    totalEmployees: 248,
-    netPayrollThisMonth: 1842860,
-    pendingApprovals: 6,
-    attendanceHealth: "96.8%",
+    totalEmployees: 0,
+    netPayrollThisMonth: 0,
+    pendingApprovals: 0,
+    attendanceHealth: "100%",
   };
 
   const activity = data?.recentActivity || [];
-
   const activeRole = data?.user?.role || "EMPLOYEE";
+
+  const todayStr = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase();
+  const currentMonthStr = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 
   return (
     <>
       <div className="page-head">
         <div>
-          <p className="eyebrow">FRIDAY, 18 SEPTEMBER 2026</p>
+          <p className="eyebrow">{todayStr}</p>
           <h1>Good morning, {data?.user?.firstName || "there"}</h1>
           <p>
-            September 2026 Payroll <span className="dot-sep">•</span> Processing
+            {currentMonthStr} Payroll <span className="dot-sep">•</span> Processing
           </p>
         </div>
         {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
@@ -81,20 +83,20 @@ export default function OverviewPage() {
         </div>
 
         <div className="attention-grid">
-          {["ADMIN", "HR_MANAGER", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+          {["ADMIN", "HR_MANAGER", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && data?.alerts?.missingBankCount > 0 && (
             <SeverityCard
               type="blocker"
-              title={`${data?.alerts?.missingBankCount || 2} employees missing bank details`}
-              description="Blocks payslip finalisation for September."
+              title={`${data.alerts.missingBankCount} employees missing bank details`}
+              description={`Blocks payslip finalisation for ${currentMonthStr}.`}
               action="Review"
               onClick={() => (window.location.href = "/employees")}
             />
           )}
-          {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+          {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && data?.alerts?.warningsCount > 0 && (
             <SeverityCard
               type="warning"
-              title="Duplicate payslip detected"
-              description="Aarav Mehta appears twice in September run."
+              title={`${data.alerts.warningsCount} payslip warnings detected`}
+              description="Review negative net pays or duplicate rules."
               action="Review"
               onClick={() => (window.location.href = "/payroll/payslips")}
             />
@@ -102,16 +104,16 @@ export default function OverviewPage() {
           {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
             <SeverityCard
               type="deadline"
-              title="Validate September payrun"
-              description="Validation is due in 10 days, by 28 Sep."
+              title={`Validate ${currentMonthStr} payrun`}
+              description="Validation is due soon, keep payroll moving."
               action="Open"
               onClick={() => (window.location.href = "/payroll/payruns")}
             />
           )}
           <SeverityCard
             type="info"
-            title="245 of 248 employees ready"
-            description="Three records need a final review."
+            title={`${kpis.totalEmployees} employees active`}
+            description="All systems normal and ready for processing."
           />
         </div>
       </section>
@@ -147,7 +149,7 @@ export default function OverviewPage() {
         <div className="section-title">
           <div>
             <span className="eyebrow">CURRENT PAYROLL CYCLE</span>
-            <h2>September 2026</h2>
+            <h2>{currentMonthStr}</h2>
           </div>
           <StatusPill status="Processing" />
         </div>

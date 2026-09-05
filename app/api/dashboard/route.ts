@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/auth/session";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { searchParams } = new URL(req.url);
     const departmentId = searchParams.get("departmentId");
 
@@ -118,7 +118,10 @@ export async function GET(req: NextRequest) {
     const allPayruns = await prisma.payrun.findMany({
       where: { deletedAt: null, status: "PAID" },
       orderBy: { periodStart: "asc" },
-      select: { periodStart: true, totalNet: true },
+      select: { 
+        periodStart: true, 
+        payslips: { select: { netAmount: true } } 
+      },
     });
 
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -135,7 +138,8 @@ export async function GET(req: NextRequest) {
     for (const pr of allPayruns) {
       const monthLabel = monthNames[new Date(pr.periodStart).getMonth()];
       if (chartMap.has(monthLabel)) {
-        chartMap.set(monthLabel, Number((Number(pr.totalNet) / 100000).toFixed(1)));
+        const prTotalNet = pr.payslips.reduce((acc, p) => acc + Number(p.netAmount), 0);
+        chartMap.set(monthLabel, Number((prTotalNet / 100000).toFixed(1)));
       }
     }
     
@@ -155,10 +159,14 @@ export async function GET(req: NextRequest) {
     
     // Resolve counts
     const resolvedHeadcount = await Promise.all(headcountByDept);
-    const validHeadcount = resolvedHeadcount.filter(h => h.value > 0);
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { firstName: true, role: true },
+    });
 
     return NextResponse.json({
       data: {
+        user,
         kpis: {
           totalEmployees: activeEmployees || 0,
           netPayrollThisMonth,
