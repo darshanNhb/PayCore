@@ -155,17 +155,36 @@ export async function DELETE(
     requirePermission(session.role, "employee", "delete");
     const { id } = await params;
 
-    const existing = await prisma.employee.findUnique({ where: { id, deletedAt: null } });
+    const existing = await prisma.employee.findUnique({ 
+      where: { id, deletedAt: null },
+      include: { user: true }
+    });
     if (!existing) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Employee not found" } }, { status: 404 });
     }
 
-    const softDeleted = await prisma.employee.update({
-      where: { id },
-      data: {
-        deletedAt: new Date(),
-        status: "INACTIVE",
-      },
+    if (existing.workEmail === "buddhdevdarshan1478@gmail.com") {
+      return NextResponse.json({ error: { code: "FORBIDDEN", message: "Cannot delete the main admin" } }, { status: 403 });
+    }
+
+    const softDeleted = await prisma.$transaction(async (tx) => {
+      if (existing.user) {
+        await tx.user.update({
+          where: { id: existing.user.id },
+          data: {
+            isActive: false,
+            deletedAt: new Date(),
+          },
+        });
+      }
+
+      return tx.employee.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+          status: "INACTIVE",
+        },
+      });
     });
 
     await writeAuditLog({

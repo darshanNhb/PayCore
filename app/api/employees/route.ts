@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { hashPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/db";
 import { requireSession } from "@/lib/auth/session";
 import { requirePermission } from "@/lib/auth/permissions";
@@ -10,7 +11,8 @@ import { writeAuditLog, getClientIp, getClientUserAgent } from "@/lib/utils/audi
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
+    requirePermission(session.role, "employee", "read");
     const { searchParams } = new URL(req.url);
 
     const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
@@ -96,6 +98,9 @@ export async function GET(req: NextRequest) {
     if (error.message === "UNAUTHENTICATED") {
       return NextResponse.json({ error: { code: "UNAUTHENTICATED", message: "Not logged in" } }, { status: 401 });
     }
+    if (error.statusCode === 403) {
+      return NextResponse.json({ error: { code: "FORBIDDEN", message: error.message } }, { status: 403 });
+    }
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: error.message } }, { status: 500 });
   }
 }
@@ -131,34 +136,54 @@ export async function POST(req: NextRequest) {
     const panEncrypted = validated.pan ? encryptField(validated.pan) : null;
     const bankVerified = Boolean(validated.bankAccountNumber && validated.bankIfsc);
 
-    const employee = await prisma.employee.create({
-      data: {
-        companyId,
-        employeeCode,
-        firstName: validated.firstName,
-        lastName: validated.lastName,
-        workEmail: validated.workEmail,
-        personalEmail: validated.personalEmail || null,
-        phone: validated.phone || null,
-        dateOfBirth: validated.dateOfBirth ? new Date(validated.dateOfBirth) : null,
-        dateOfJoining: new Date(validated.dateOfJoining),
-        departmentId: validated.departmentId,
-        jobPositionId: validated.jobPositionId,
-        managerId: validated.managerId || null,
-        workingScheduleId: validated.workingScheduleId || null,
-        status: validated.status,
-        employeeType: validated.employeeType,
-        workLocation: validated.workLocation || "Bengaluru, India",
-        avatarColor: chosenColor,
-        bankAccountNumberEncrypted,
-        bankIfscEncrypted,
-        panEncrypted,
-        bankVerified,
-      },
-      include: {
-        department: true,
-        jobPosition: true,
-      },
+    // Default password: PayCore_<firstName>
+    const rawPassword = `PayCore_${validated.firstName.trim()}`;
+    const passwordHash = await hashPassword(rawPassword);
+
+    const employee = await prisma.$transaction(async (tx) => {
+      const emp = await tx.employee.create({
+        data: {
+          companyId,
+          employeeCode,
+          firstName: validated.firstName,
+          lastName: validated.lastName,
+          workEmail: validated.workEmail,
+          personalEmail: validated.personalEmail || null,
+          phone: validated.phone || null,
+          dateOfBirth: validated.dateOfBirth ? new Date(validated.dateOfBirth) : null,
+          dateOfJoining: new Date(validated.dateOfJoining),
+          departmentId: validated.departmentId,
+          jobPositionId: validated.jobPositionId,
+          managerId: validated.managerId || null,
+          workingScheduleId: validated.workingScheduleId || null,
+          status: validated.status,
+          employeeType: validated.employeeType,
+          workLocation: validated.workLocation || "Bengaluru, India",
+          avatarColor: chosenColor,
+          bankAccountNumberEncrypted,
+          bankIfscEncrypted,
+          panEncrypted,
+          bankVerified,
+        },
+        include: {
+          department: true,
+          jobPosition: true,
+        },
+      });
+
+      await tx.user.create({
+        data: {
+          email: validated.workEmail,
+          passwordHash,
+          firstName: validated.firstName,
+          lastName: validated.lastName,
+          role: validated.systemRole || "EMPLOYEE",
+          employeeId: emp.id,
+          isActive: true,
+        },
+      });
+
+      return emp;
     });
 
     await writeAuditLog({

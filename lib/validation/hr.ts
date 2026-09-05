@@ -50,6 +50,7 @@ export const employeeSchema = z.object({
   bankIfsc: z.string().nullable().optional(),
   pan: z.string().nullable().optional(),
   avatarColor: z.string().nullable().optional(),
+  systemRole: z.enum(["EMPLOYEE", "HR_MANAGER", "HR_PAYROLL_USER", "HR_PAYROLL_MANAGER", "ADMIN"]).default("EMPLOYEE"),
 });
 
 export const employeeUpdateSchema = employeeSchema.partial();
