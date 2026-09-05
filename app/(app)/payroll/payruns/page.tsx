@@ -13,6 +13,7 @@ import {
   X,
   ArrowUpRight,
   ChevronRight,
+  Mail,
 } from "lucide-react";
 import { StatusPill } from "@/components/ui/status-pill";
 import { StepTracker } from "@/components/ui/step-tracker";
@@ -171,6 +172,23 @@ export default function PayrollRunsPage() {
     }
   };
 
+  const handleSendPayslips = async () => {
+    if (!activePayrun) return;
+    if (!confirm(`Send payslip emails to all ${activePayrun.employeeCount} employees in this payrun?`)) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/payroll/payruns/${activePayrun.id}/send-payslips`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "Failed to send payslips");
+      alert(data.data.message);
+      loadPayruns();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const getStepIndex = (status: string) => {
     switch (status) {
       case "DRAFT":
@@ -200,18 +218,51 @@ export default function PayrollRunsPage() {
       </div>
 
       <div className="month-strip">
-        {MONTHS.map((m, i) => (
-          <button
-            key={m}
-            className={i < 8 ? "done" : i === 8 ? "current" : ""}
-            onClick={() => i > 8 && setWizardStep(1)}
-          >
-            {i < 8 && <Check size={14} />}
-            <b>{m}</b>
-            <small>{i < 8 ? "Completed" : i === 8 ? "Current" : "Upcoming"}</small>
-            {i === 8 && <span>248 people · 3 alerts</span>}
-          </button>
-        ))}
+        {MONTHS.map((m, i) => {
+          // Find payrun(s) for this month in the current year
+          const monthPayruns = payruns.filter((pr) => {
+            const start = new Date(pr.periodStart);
+            return start.getMonth() === i && start.getFullYear() === new Date().getFullYear();
+          });
+          const paidRun = monthPayruns.find((pr) => pr.status === "PAID");
+          const activeRun = monthPayruns.find((pr) => pr.status !== "PAID" && pr.status !== "CANCELLED");
+          const isDone = !!paidRun;
+          const isCurrent = !isDone && !!activeRun;
+
+          return (
+            <button
+              key={m}
+              className={isDone ? "done" : isCurrent ? "current" : ""}
+              onClick={() => {
+                if (activeRun) {
+                  // Load this payrun as active
+                  fetch(`/api/payroll/payruns/${activeRun.id}`)
+                    .then((r) => r.json())
+                    .then((d) => d?.data && setActivePayrun(d.data));
+                } else if (paidRun) {
+                  fetch(`/api/payroll/payruns/${paidRun.id}`)
+                    .then((r) => r.json())
+                    .then((d) => d?.data && setActivePayrun(d.data));
+                } else {
+                  setWizardStep(1);
+                }
+              }}
+            >
+              {isDone && <Check size={14} />}
+              <b>{m}</b>
+              <small>
+                {isDone
+                  ? "Completed"
+                  : isCurrent
+                  ? "Current"
+                  : "Upcoming"}
+              </small>
+              {isCurrent && activeRun && (
+                <span>{activeRun.employeeCount} people{activeRun.warningsCount > 0 ? ` · ${activeRun.warningsCount} alerts` : ""}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {loading && !activePayrun ? (
@@ -289,13 +340,13 @@ export default function PayrollRunsPage() {
               )}
 
               {activePayrun.status === "PAID" && (
-                <Link
-                  href="/payroll/payslips"
-                  className="secondary"
-                  style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                <button
+                  className="primary"
+                  onClick={handleSendPayslips}
+                  disabled={actionLoading}
                 >
-                  <Download size={16} /> Send payslips
-                </Link>
+                  <Mail size={16} /> {actionLoading ? "Sending..." : "Send payslips"}
+                </button>
               )}
 
               <Link
@@ -308,22 +359,17 @@ export default function PayrollRunsPage() {
             </div>
           </div>
 
-          <div className="run-alert">
-            <SeverityCard
-              type="blocker"
-              title="2 employees missing bank account details"
-              description="Resolve these records before marking the payrun paid."
-              action="Review employees"
-              onClick={() => (window.location.href = "/employees")}
-            />
-            <SeverityCard
-              type="warning"
-              title="Possible duplicate payslip"
-              description="Aarav Mehta has an existing draft payslip for September."
-              action="Review"
-              onClick={() => (window.location.href = "/payroll/payslips")}
-            />
-          </div>
+          {activePayrun.warningsCount > 0 && (
+            <div className="run-alert">
+              <SeverityCard
+                type="warning"
+                title={`${activePayrun.warningsCount} payslip(s) have warnings`}
+                description="Review payslips to check for missing bank details, duplicates, or other issues."
+                action="View payslips"
+                onClick={() => (window.location.href = `/payroll/payslips?payrunId=${activePayrun.id}`)}
+              />
+            </div>
+          )}
         </section>
       )}
 

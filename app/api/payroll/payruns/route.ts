@@ -17,7 +17,8 @@ const createPayrunSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
+    requirePermission(session.role, "payrun", "read");
     const payruns = await prisma.payrun.findMany({
       where: { deletedAt: null },
       include: {
@@ -68,6 +69,9 @@ export async function GET(req: NextRequest) {
     if (error.message === "UNAUTHENTICATED") {
       return NextResponse.json({ error: { code: "UNAUTHENTICATED", message: "Not logged in" } }, { status: 401 });
     }
+    if (error.statusCode === 403) {
+      return NextResponse.json({ error: { code: "FORBIDDEN", message: error.message } }, { status: 403 });
+    }
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: error.message } }, { status: 500 });
   }
 }
@@ -115,33 +119,32 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // Create one DRAFT payslip for each selected employee
-      for (const empId of validated.employeeIds) {
-        const contractId = contractMap.get(empId);
-        if (!contractId) continue; // Skip if no running contract found
+      // Build payslip data for all employees with running contracts
+      const payslipData = validated.employeeIds
+        .filter((empId) => contractMap.has(empId))
+        .map((empId) => ({
+          payrunId: pr.id,
+          employeeId: empId,
+          contractId: contractMap.get(empId)!,
+          salaryStructureId: validated.salaryStructureId,
+          periodStart,
+          periodEnd,
+          workedDays: 22,
+          totalWorkingDays: 22,
+          unpaidLeaveDays: 0,
+          grossAmount: 0,
+          totalDeductions: 0,
+          netAmount: 0,
+          status: "DRAFT" as const,
+          hasWarnings: false,
+        }));
 
-        await tx.payslip.create({
-          data: {
-            payrunId: pr.id,
-            employeeId: empId,
-            contractId,
-            salaryStructureId: validated.salaryStructureId,
-            periodStart,
-            periodEnd,
-            workedDays: 22,
-            totalWorkingDays: 22,
-            unpaidLeaveDays: 0,
-            grossAmount: 0,
-            totalDeductions: 0,
-            netAmount: 0,
-            status: "DRAFT",
-            hasWarnings: false,
-          },
-        });
+      if (payslipData.length > 0) {
+        await tx.payslip.createMany({ data: payslipData });
       }
 
       return pr;
-    });
+    }, { timeout: 30000 });
 
     await writeAuditLog({
       actorUserId: session.userId,

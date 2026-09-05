@@ -105,7 +105,7 @@ export async function POST(
               salaryRuleId: l.salaryRuleId,
               ruleCode: l.ruleCode,
               ruleName: l.ruleName,
-              category: l.category,
+              category: l.category as any,
               sequence: l.sequence,
               amount: l.amount,
             })),
@@ -145,7 +145,7 @@ export async function POST(
           computedAt: new Date(),
         },
       });
-    });
+    }, { timeout: 60000 });
 
     await writeAuditLog({
       actorUserId: session.userId,
