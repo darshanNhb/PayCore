@@ -6,6 +6,7 @@ import { Download, Search, X, LockKeyhole, ChevronRight } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { StatusPill } from "@/components/ui/status-pill";
 import { formatCurrency } from "@/lib/utils/format";
+import { generatePayslipPdf } from "@/lib/payroll/pdf-generator";
 
 interface PayslipListItem {
   id: string;
@@ -101,6 +102,37 @@ export default function PayslipsPage() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleDownloadPdf = () => {
+    if (!selectedPayslip) return;
+    const earnings = (selectedPayslip.lines || [])
+      .filter((l: any) => l.category === "BASIC" || l.category === "ALLOWANCE" || l.category === "GROSS")
+      .map((l: any) => ({ name: l.ruleName, amount: Math.abs(Number(l.amount)) }));
+    const deductions = (selectedPayslip.lines || [])
+      .filter((l: any) => l.category === "DEDUCTION")
+      .map((l: any) => ({ name: l.ruleName, amount: Math.abs(Number(l.amount)) }));
+    const periodStr = new Date(selectedPayslip.periodStart).toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+
+    const doc = generatePayslipPdf({
+      companyName: "PayCore India Pvt. Ltd.",
+      employeeName: selectedPayslip.employeeName || `${selectedPayslip.employee?.firstName || ""} ${selectedPayslip.employee?.lastName || ""}`,
+      employeeCode: selectedPayslip.employeeCode || selectedPayslip.employee?.employeeCode || "",
+      department: selectedPayslip.department || "General",
+      jobPosition: selectedPayslip.jobPosition || "Staff",
+      period: periodStr,
+      workedDays: Number(selectedPayslip.workedDays || 22),
+      totalWorkingDays: Number(selectedPayslip.totalWorkingDays || 22),
+      unpaidLeaveDays: Number(selectedPayslip.unpaidLeaveDays || 0),
+      earnings,
+      deductions,
+      grossAmount: Number(selectedPayslip.grossAmount || 0),
+      totalDeductions: Number(selectedPayslip.totalDeductions || 0),
+      netAmount: Number(selectedPayslip.netAmount || 0),
+    });
+
+    const filename = `Payslip_${selectedPayslip.employeeCode || "EMP"}_${periodStr.replace(/\s+/g, "_")}.pdf`;
+    doc.save(filename);
   };
 
   return (
@@ -258,7 +290,7 @@ export default function PayslipsPage() {
             <footer>
               <button
                 className="secondary"
-                onClick={() => window.open(`/api/payroll/payslips/${selectedPayslip.id}/pdf`, "_blank")}
+                onClick={handleDownloadPdf}
               >
                 <Download size={16} /> Download protected PDF
               </button>
