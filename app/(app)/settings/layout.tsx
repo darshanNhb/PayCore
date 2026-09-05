@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Shield, Building2 } from "lucide-react";
+import { Users, Shield, Building2, Paintbrush } from "lucide-react";
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const links = [
-    { href: "/settings/users", label: "Users & Roles", icon: Users },
     { href: "/settings/company", label: "Company Profile", icon: Building2 },
+    { href: "/settings/appearance", label: "Appearance", icon: Paintbrush },
   ];
 
   return (

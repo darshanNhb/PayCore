@@ -30,6 +30,14 @@ export async function PATCH(
     const body = await req.json();
     const validated = updateUserSchema.parse(body);
 
+    // Self-role-elevation prevention: reject if user tries to change their own role
+    if (session.userId === id && validated.role && validated.role !== existing.role) {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "You cannot change your own role" } },
+        { status: 403 }
+      );
+    }
+
     const updated = await prisma.user.update({
       where: { id },
       data: validated,

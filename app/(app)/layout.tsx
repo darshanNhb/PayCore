@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, ChevronDown, Menu, PanelLeftClose, LogOut, Settings, Search } from "lucide-react";
+import { Menu, PanelLeftClose, LogOut, Settings } from "lucide-react";
 import { NAV_GROUPS } from "@/lib/nav-config";
 import { hasPermission } from "@/lib/auth/permissions";
 import { UserRole } from "@prisma/client";
@@ -27,7 +27,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
-  const [previewRole, setPreviewRole] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Load user data
@@ -55,7 +54,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     window.location.href = "/login";
   };
 
-  const activeRole = previewRole || user?.role || "ADMIN";
+  const activeRole = user?.role || "EMPLOYEE";
 
   // Filter nav groups based on active role permissions
   const visibleNavGroups = NAV_GROUPS.map((group) => {
@@ -121,10 +120,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ))}
 
         <div className="sidebar-bottom">
-          <Link href="/settings/users" style={{ display: "flex", alignItems: "center", gap: "11px", padding: "10px", borderRadius: "8px", color: pathname.startsWith("/settings") ? "#fff" : "#c3c1d3", textDecoration: "none", backgroundColor: pathname.startsWith("/settings") ? "#2d2a4d" : "transparent" }}>
-            <Settings size={18} />
-            {!collapsed && "Settings"}
-          </Link>
+          {hasPermission(activeRole, "settings", "read") && (
+            <Link href="/settings/company" style={{ display: "flex", alignItems: "center", gap: "11px", padding: "10px", borderRadius: "8px", color: pathname.startsWith("/settings") ? "#fff" : "#c3c1d3", textDecoration: "none", backgroundColor: pathname.startsWith("/settings") ? "#2d2a4d" : "transparent" }}>
+              <Settings size={18} />
+              {!collapsed && "Settings"}
+            </Link>
+          )}
           <button onClick={handleLogout} className="text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-colors">
             <LogOut size={18} />
             {!collapsed && "Sign out"}
@@ -134,49 +135,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main>
-        <header className="topbar">
-          <div className="search">
-            <Search size={17} />
-            <input placeholder="Search employees, payslips, contracts…" />
-          </div>
-          <div className="top-actions">
-            <button className="icon-btn" aria-label="Notifications">
-              <Bell size={18} />
-              <i className="notify" />
-            </button>
-            
-            {user.role === "ADMIN" && (
-              <select
-                value={activeRole}
-                onChange={(e) => {
-                  const selected = e.target.value as UserRole;
-                  if (selected === "EMPLOYEE") {
-                    router.push("/portal");
-                  } else {
-                    setPreviewRole(selected);
-                  }
-                }}
-                aria-label="Viewing role"
-              >
-                <option value="ADMIN">Admin</option>
-                <option value="HR_PAYROLL_MANAGER">HR Payroll Manager</option>
-                <option value="HR_PAYROLL_USER">HR Payroll User</option>
-                <option value="HR_MANAGER">HR Manager</option>
-                <option value="EMPLOYEE">Employee Portal</option>
-              </select>
-            )}
-
-            <div className="user-chip">
-              <span>{user.firstName.charAt(0)}{user.lastName.charAt(0)}</span>
-              <div>
-                <b>{user.firstName}</b>
-                <small>{activeRole.replace(/_/g, " ")}</small>
-              </div>
-              <ChevronDown size={15} />
-            </div>
-          </div>
-        </header>
-
         <div className="page">{children}</div>
       </main>
     </div>

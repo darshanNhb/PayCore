@@ -12,7 +12,7 @@ const createUserSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   role: z.enum(["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER", "HR_MANAGER", "EMPLOYEE"]),
-  employeeId: z.string().uuid().nullable().optional(),
+  employeeId: z.string().uuid("User must be linked to an employee"),
 });
 
 export async function GET(req: NextRequest) {
@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
         role: true,
         isActive: true,
         lastLoginAt: true,
-        employee: { select: { id: true, employeeCode: true, department: { select: { name: true } } } },
+        employeeId: true,
+        employee: { select: { id: true, firstName: true, lastName: true, workEmail: true, employeeCode: true, department: { select: { name: true } } } },
         createdAt: true,
       },
       orderBy: { createdAt: "desc" },
