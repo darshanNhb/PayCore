@@ -11,6 +11,16 @@ export default function EmployeePortal() {
   const [page, setPage] = useState("My Home");
   const [user, setUser] = useState<any>(null);
   const [employee, setEmployee] = useState<any>(null);
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
+  const [allocations, setAllocations] = useState<any[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<any[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [leaveForm, setLeaveForm] = useState({
+    timeOffTypeId: "",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: new Date().toISOString().split("T")[0],
+    reason: "",
+  });
   const [payslips, setPayslips] = useState<any[]>([]);
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInTime, setCheckInTime] = useState<Date | null>(null);
@@ -30,12 +40,31 @@ export default function EmployeePortal() {
           setLoading(false); // Unblock screen immediately!
 
           if (d.user.employeeId) {
+            
+            // Get first day and last day of current month
+            const now = new Date();
+            const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            const to = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString();
+            
             Promise.all([
               fetch(`/api/employees/${d.user.employeeId}`).then((r) => r.json()).catch(() => null),
-              fetch(`/api/payroll/payslips?employeeId=${d.user.employeeId}`).then((r) => r.json()).catch(() => null)
-            ]).then(([empData, slipsData]) => {
+              fetch(`/api/payroll/payslips?employeeId=${d.user.employeeId}`).then((r) => r.json()).catch(() => null),
+              fetch(`/api/time-off/types`).then((r) => r.json()).catch(() => null),
+              fetch(`/api/time-off/allocations?employeeId=${d.user.employeeId}`).then((r) => r.json()).catch(() => null),
+              fetch(`/api/time-off/requests?employeeId=${d.user.employeeId}`).then((r) => r.json()).catch(() => null),
+              fetch(`/api/attendance?employeeId=${d.user.employeeId}&from=${from}&to=${to}`).then((r) => r.json()).catch(() => null),
+            ]).then(([empData, slipsData, typesData, allocsData, reqsData, attData]) => {
               if (empData?.data) setEmployee(empData.data);
               if (slipsData?.data) setPayslips(slipsData.data);
+              if (typesData?.data) {
+                setLeaveTypes(typesData.data);
+                if (typesData.data.length > 0) {
+                  setLeaveForm((prev) => ({ ...prev, timeOffTypeId: typesData.data[0].id }));
+                }
+              }
+              if (allocsData?.data) setAllocations(allocsData.data);
+              if (reqsData?.data) setLeaveRequests(reqsData.data);
+              if (attData?.data) setAttendanceRecords(attData.data);
             });
           }
         } else {
@@ -80,8 +109,6 @@ export default function EmployeePortal() {
     return () => clearInterval(interval);
   }, [checkedIn, checkInTime]);
 
-
-
   const handleToggleCheckIn = async () => {
     try {
       const endpoint = checkedIn ? "/api/attendance/check-out" : "/api/attendance/check-in";
@@ -104,6 +131,43 @@ export default function EmployeePortal() {
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/login";
+  };
+
+  const handleSubmitLeave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!employee) return;
+    
+    try {
+      const start = new Date(leaveForm.startDate);
+      const end = new Date(leaveForm.endDate);
+      const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
+      
+      const res = await fetch("/api/time-off/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          timeOffTypeId: leaveForm.timeOffTypeId,
+          startDate: leaveForm.startDate,
+          endDate: leaveForm.endDate,
+          durationAmount: days,
+          reason: leaveForm.reason,
+        }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "Failed to submit request");
+      
+      alert("Leave request submitted successfully for manager review!");
+      
+      // Reload requests
+      const reqs = await fetch(`/api/time-off/requests?employeeId=${employee.id}`).then((r) => r.json());
+      if (reqs.data) setLeaveRequests(reqs.data);
+      
+      setLeaveForm({ ...leaveForm, reason: "" });
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   if (loading || !user) {
@@ -184,12 +248,12 @@ export default function EmployeePortal() {
               <section className="surface leave-card">
                 <span className="eyebrow">LEAVE BALANCE</span>
                 <h2>
-                  14.5 days <small>remaining</small>
+                  {allocations[0] ? (allocations[0].allocatedAmount - allocations[0].takenAmount) : 0} days <small>remaining</small>
                 </h2>
                 <div className="bar">
-                  <i style={{ width: "57.5%" }} />
+                  <i style={{ width: `${allocations[0] ? (allocations[0].takenAmount / allocations[0].allocatedAmount) * 100 : 0}%` }} />
                 </div>
-                <p>11.5 days used of 20 annual days</p>
+                <p>{allocations[0]?.takenAmount || 0} days used of {allocations[0]?.allocatedAmount || 0} annual days</p>
                 <button
                   className="secondary"
                   onClick={() => setPage("My Leave")}
@@ -252,21 +316,59 @@ export default function EmployeePortal() {
         {page === "My Attendance" && (
           <section className="surface detail-card">
             <h2>My attendance record</h2>
-            <p className="sub">September 2026 · All locations</p>
+            <p className="sub">
+              {new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" })} · All locations
+            </p>
             <div className="month-grid mini" style={{ marginTop: "20px" }}>
-              {Array.from({ length: 30 }, (_, i) => {
-                const isWeekend = (i + 1) % 7 === 6 || (i + 1) % 7 === 0;
-                const isLate = i === 7 || i === 13;
-                return (
-                  <span
-                    key={i}
-                    className={isWeekend ? "weekend" : isLate ? "late" : "present"}
-                  >
-                    {i + 1}
-                    <i>{isWeekend ? "—" : isLate ? "⚠" : "✓"}</i>
-                  </span>
-                );
-              })}
+              {(() => {
+                const now = new Date();
+                const year = now.getFullYear();
+                const month = now.getMonth();
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
+                const today = now.getDate();
+
+                return Array.from({ length: daysInMonth }, (_, i) => {
+                  const day = i + 1;
+                  const date = new Date(year, month, day);
+                  const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                  
+                  // Find record for this day
+                  const record = attendanceRecords.find((r: any) => {
+                    const recordDate = new Date(r.checkIn);
+                    return recordDate.getDate() === day && recordDate.getMonth() === month && recordDate.getFullYear() === year;
+                  });
+
+                  let statusClass = "absent";
+                  let icon = "✕";
+
+                  if (isWeekend) {
+                    statusClass = "weekend";
+                    icon = "—";
+                  } else if (record) {
+                    if (record.status === "LATE") {
+                      statusClass = "late";
+                      icon = "⚠";
+                    } else {
+                      statusClass = "present";
+                      icon = "✓";
+                    }
+                  } else if (day > today) {
+                    statusClass = "future";
+                    icon = ""; // Blank for future days
+                  }
+
+                  return (
+                    <span
+                      key={i}
+                      className={statusClass}
+                      title={record ? `In: ${new Date(record.checkIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}${record.checkOut ? `\nOut: ${new Date(record.checkOut).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : ''}` : isWeekend ? 'Weekend' : day > today ? '' : 'Absent'}
+                    >
+                      {day}
+                      {icon && <i>{icon}</i>}
+                    </span>
+                  );
+                });
+              })()}
             </div>
           </section>
         )}
@@ -276,33 +378,56 @@ export default function EmployeePortal() {
             <section className="surface detail-card">
               <h2>Request Time Off</h2>
               <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  alert("Leave request submitted for manager review!");
-                }}
+                onSubmit={handleSubmitLeave}
                 style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "14px" }}
               >
                 <label>
                   Leave type
-                  <select>
-                    <option>Earned Leave (14.5 days remaining)</option>
-                    <option>Sick Leave (6 days remaining)</option>
-                    <option>Work From Home</option>
+                  <select 
+                    value={leaveForm.timeOffTypeId}
+                    onChange={(e) => setLeaveForm({...leaveForm, timeOffTypeId: e.target.value})}
+                    required
+                  >
+                    <option value="" disabled>Select a type...</option>
+                    {leaveTypes.map(t => {
+                      const alloc = allocations.find(a => a.timeOffTypeId === t.id && a.status === "APPROVED");
+                      const remain = alloc ? (alloc.allocatedAmount - alloc.takenAmount) : 0;
+                      return (
+                        <option key={t.id} value={t.id}>
+                          {t.name} {t.requiresAllocation ? `(${remain} days remaining)` : ""}
+                        </option>
+                      );
+                    })}
                   </select>
                 </label>
                 <div className="form-grid">
                   <label>
                     Start date
-                    <input type="date" defaultValue="2026-09-22" />
+                    <input 
+                      type="date" 
+                      value={leaveForm.startDate}
+                      onChange={(e) => setLeaveForm({...leaveForm, startDate: e.target.value})}
+                      required 
+                    />
                   </label>
                   <label>
                     End date
-                    <input type="date" defaultValue="2026-09-24" />
+                    <input 
+                      type="date" 
+                      value={leaveForm.endDate}
+                      onChange={(e) => setLeaveForm({...leaveForm, endDate: e.target.value})}
+                      required 
+                    />
                   </label>
                 </div>
                 <label>
                   Reason
-                  <input placeholder="e.g. Family event" />
+                  <input 
+                    placeholder="e.g. Family event" 
+                    value={leaveForm.reason}
+                    onChange={(e) => setLeaveForm({...leaveForm, reason: e.target.value})}
+                    required
+                  />
                 </label>
                 <button type="submit" className="primary" style={{ alignSelf: "flex-start" }}>
                   Submit request
@@ -313,24 +438,68 @@ export default function EmployeePortal() {
             <section className="surface detail-card">
               <h2>Current Leave Balances</h2>
               <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
-                <div>
-                  <b>Earned Leave</b>
-                  <p style={{ margin: "2px 0 6px 0", fontSize: "12px", color: "#78716C" }}>
-                    14.5 of 20 days remaining
-                  </p>
-                  <div className="bar" style={{ height: "6px", background: "#E7E5E4", borderRadius: "3px" }}>
-                    <div style={{ width: "27.5%", height: "100%", background: "#4F46E5", borderRadius: "3px" }} />
-                  </div>
-                </div>
-                <div>
-                  <b>Sick Leave</b>
-                  <p style={{ margin: "2px 0 6px 0", fontSize: "12px", color: "#78716C" }}>
-                    6 of 7 days remaining
-                  </p>
-                  <div className="bar" style={{ height: "6px", background: "#E7E5E4", borderRadius: "3px" }}>
-                    <div style={{ width: "14%", height: "100%", background: "#10B981", borderRadius: "3px" }} />
-                  </div>
-                </div>
+                {allocations.map((a, i) => {
+                  const remaining = a.allocatedAmount - a.takenAmount;
+                  const pct = (a.takenAmount / a.allocatedAmount) * 100;
+                  const colors = ["#4F46E5", "#10B981", "#F59E0B", "#EC4899"];
+                  const color = colors[i % colors.length];
+                  
+                  return (
+                    <div key={a.id}>
+                      <b>{a.timeOffType?.name || "Leave"}</b>
+                      <p style={{ margin: "2px 0 6px 0", fontSize: "12px", color: "#78716C" }}>
+                        {remaining} of {a.allocatedAmount} days remaining
+                      </p>
+                      <div className="bar" style={{ height: "6px", background: "#E7E5E4", borderRadius: "3px" }}>
+                        <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: "3px" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {allocations.length === 0 && (
+                  <p style={{ fontSize: "13px", color: "#78716C" }}>No allocations found.</p>
+                )}
+              </div>
+            </section>
+            
+            <section className="surface detail-card" style={{ gridColumn: "1 / -1" }}>
+              <h2>My Leave Requests</h2>
+              <div style={{ marginTop: "16px" }}>
+                {leaveRequests.length === 0 ? (
+                  <p style={{ fontSize: "13px", color: "#78716C", textAlign: "center", padding: "20px" }}>No leave requests submitted yet.</p>
+                ) : (
+                  <table style={{ width: "100%", textAlign: "left", fontSize: "13px" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ paddingBottom: "8px", color: "#78716C", fontWeight: 600 }}>Type</th>
+                        <th style={{ paddingBottom: "8px", color: "#78716C", fontWeight: 600 }}>Dates</th>
+                        <th style={{ paddingBottom: "8px", color: "#78716C", fontWeight: 600 }}>Duration</th>
+                        <th style={{ paddingBottom: "8px", color: "#78716C", fontWeight: 600 }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {leaveRequests.map(r => (
+                        <tr key={r.id} style={{ borderTop: "1px solid #E7E5E4" }}>
+                          <td style={{ padding: "12px 0" }}><b>{r.type}</b></td>
+                          <td style={{ padding: "12px 0" }}>{r.dates}</td>
+                          <td style={{ padding: "12px 0" }}>{r.duration} day{r.duration > 1 ? "s" : ""}</td>
+                          <td style={{ padding: "12px 0" }}>
+                            <span style={{ 
+                              fontSize: "11px", 
+                              padding: "2px 8px", 
+                              borderRadius: "12px",
+                              fontWeight: 600,
+                              background: r.status === "APPROVED" ? "#DCFCE7" : r.status === "REFUSED" ? "#FEE2E2" : "#FEF9C3",
+                              color: r.status === "APPROVED" ? "#16A34A" : r.status === "REFUSED" ? "#DC2626" : "#CA8A04"
+                            }}>
+                              {r.status.replace("_", " ")}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </section>
           </div>

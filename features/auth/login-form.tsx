@@ -4,34 +4,22 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowUpRight } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { loginSchema, type LoginInput } from "@/lib/validation/auth";
 
 export function LoginForm() {
   const router = useRouter();
-  const [isEmployee, setIsEmployee] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: isEmployee ? "aarav.mehta@paycore.in" : "darshan@paycore.in",
-      password: "password",
-    },
   });
-
-  const handleToggle = () => {
-    const next = !isEmployee;
-    setIsEmployee(next);
-    setValue("email", next ? "aarav.mehta@paycore.in" : "darshan@paycore.in");
-    setValue("password", "password");
-  };
 
   const onSubmit = async (data: LoginInput) => {
     setError(null);
@@ -44,11 +32,11 @@ export function LoginForm() {
 
       const body = await res.json();
       if (!res.ok) {
-        setError(body.error || "Failed to login");
+        setError("Invalid email or password");
         return;
       }
 
-      // Hard redirect based on user role from server
+      // Route based on role
       if (body.role === "EMPLOYEE") {
         window.location.href = "/portal";
       } else {
@@ -63,108 +51,138 @@ export function LoginForm() {
     <main className="login">
       <div className="login-glow one" />
       <div className="login-glow two" />
-      
+
       <section className="login-card">
         <div className="login-logo">
-          <span>P</span> paycore
+          <span>P</span> HR Portal
         </div>
+
         <div className="login-intro">
-          <h1>{isEmployee ? "Welcome back" : "Payroll, in sync."}</h1>
-          <p>
-            {isEmployee
-              ? "Sign in to your personal workspace."
-              : "The calm operating system for people and pay."}
-          </p>
+          <h1>Welcome back</h1>
+          <p>Sign in to continue to your workspace.</p>
         </div>
+
+        {error && (
+          <div
+            style={{
+              background: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              color: "#dc2626",
+              padding: "10px 14px",
+              borderRadius: "8px",
+              fontSize: "13px",
+              marginBottom: "8px",
+              fontWeight: 500,
+            }}
+          >
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit(onSubmit)}>
           <label>
-            Work email
+            Work Email
             <input
               type="email"
+              placeholder="name@company.com"
               {...register("email")}
               className={errors.email ? "border-red-500" : ""}
             />
             {errors.email && (
-              <span className="text-red-500 text-xs block mt-1">{errors.email.message}</span>
+              <span className="text-red-500 text-xs block mt-1">
+                {errors.email.message}
+              </span>
             )}
           </label>
 
           <label>
-            Password <a>Forgot password?</a>
-            <input
-              type="password"
-              {...register("password")}
-              className={errors.password ? "border-red-500" : ""}
-            />
+            <span
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              Password
+              <Link
+                href="/forgot-password"
+                style={{
+                  fontSize: "12px",
+                  color: "#6366f1",
+                  textDecoration: "none",
+                  fontWeight: 500,
+                }}
+              >
+                Forgot password?
+              </Link>
+            </span>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                {...register("password")}
+                className={errors.password ? "border-red-500" : ""}
+                style={{ paddingRight: "40px" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  right: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "4px",
+                  color: "#a1a1aa",
+                  display: "flex",
+                }}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
             {errors.password && (
-              <span className="text-red-500 text-xs block mt-1">{errors.password.message}</span>
+              <span className="text-red-500 text-xs block mt-1">
+                {errors.password.message}
+              </span>
             )}
           </label>
-
-          {error && (
-            <div className="text-red-500 text-sm mb-4 bg-red-50 p-2 rounded">
-              {error}
-            </div>
-          )}
 
           <button
             type="submit"
             className="primary wide"
             disabled={isSubmitting}
           >
-            {isSubmitting ? "Signing in..." : "Sign in"}{" "}
-            {!isSubmitting && <ArrowUpRight size={17} />}
+            {isSubmitting ? (
+              <>
+                <Loader2 size={17} className="animate-spin" /> Signing in…
+              </>
+            ) : (
+              "Sign In"
+            )}
           </button>
         </form>
 
-        <div className="mt-4 pt-4 border-t border-stone-200">
-          <p className="text-xs text-stone-500 mb-2 font-medium">Quick Demo Accounts:</p>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { label: "Admin", email: "darshan@paycore.in", emp: false },
-              { label: "HR Payroll Mgr", email: "priya.payroll@paycore.in", emp: false },
-              { label: "HR Payroll User", email: "rohit.payroll@paycore.in", emp: false },
-              { label: "HR Manager", email: "sneha.hr@paycore.in", emp: false },
-              { label: "Employee", email: "aarav.mehta@paycore.in", emp: true },
-            ].map((d) => (
-              <button
-                key={d.email}
-                type="button"
-                onClick={() => {
-                  setIsEmployee(d.emp);
-                  setValue("email", d.email);
-                  setValue("password", "password");
-                }}
-                className="text-[11px] px-2 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-md transition-colors"
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className="portal-link"
-          onClick={handleToggle}
+        <p
+          style={{
+            textAlign: "center",
+            color: "#a1a1aa",
+            fontSize: "12px",
+            marginTop: "16px",
+          }}
         >
-          {isEmployee
-            ? "Back to organisation sign in"
-            : "Employee? Access your portal here"}
-        </button>
+          Accounts are created by an administrator.
+        </p>
 
-        <div className="mt-6 pt-4 border-t border-stone-200 text-center">
-          <p className="text-sm text-stone-600">
-            Don't have an account? <Link href="/signup" className="text-indigo-600 font-medium hover:underline">Sign up here</Link>
-          </p>
-        </div>
       </section>
 
       <div className="login-copy">
         <span className="eyebrow">PAYCORE / 2026</span>
         <h2>
-          Clear operations.<br />
+          Clear operations.
+          <br />
           Confident decisions.
         </h2>
         <p>One connected record from onboarding to payslip.</p>
