@@ -7,10 +7,13 @@ import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/auth/session";
 const PUBLIC_PATHS = [
   "/_next",
   "/favicon.ico",
+  "/api/health",
   "/api/auth/login",
   "/api/auth/refresh",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+  "/api/auth/signup",
+  "/api/auth/verify-otp",
 ];
 
 export async function middleware(request: NextRequest) {
@@ -22,12 +25,15 @@ export async function middleware(request: NextRequest) {
   }
 
   // Allow unauthenticated access to the login/reset pages themselves
-  if (pathname === "/login" || pathname === "/forgot-password" || pathname === "/reset-password") {
-    // If they have a token and try to go to login, we might want to redirect them to /overview
+  if (pathname === "/login" || pathname === "/forgot-password" || pathname === "/reset-password" || pathname === "/signup") {
+    // If they have a token and try to go to login, redirect to appropriate landing page
     const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value;
     if (accessToken) {
       try {
-        await verifyAccessToken(accessToken);
+        const payload = await verifyAccessToken(accessToken);
+        if (payload.role === "EMPLOYEE") {
+          return NextResponse.redirect(new URL("/portal", request.url));
+        }
         return NextResponse.redirect(new URL("/overview", request.url));
       } catch (e) {
         // Token invalid, let them see the login page

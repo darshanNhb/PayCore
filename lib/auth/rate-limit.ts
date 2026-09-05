@@ -8,14 +8,16 @@ import { redis } from "@/lib/redis";
  * @see PayCore_Build_Prompt.md Section 6.1, 3.2
  */
 
+const isDev = process.env.NODE_ENV !== "production";
+
 /**
- * Login rate limiter: 5 attempts per 5 minutes per IP.
+ * Login rate limiter: 5 attempts per 5 minutes per IP in production (100 in development).
  * Prevents brute-force credential stuffing.
  */
 export const loginRateLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(5, "5 m"),
-  prefix: "ratelimit:login",
+  limiter: isDev ? Ratelimit.slidingWindow(100, "1 m") : Ratelimit.slidingWindow(5, "5 m"),
+  prefix: isDev ? "ratelimit:dev:login" : "ratelimit:login",
   analytics: true,
 });
 
