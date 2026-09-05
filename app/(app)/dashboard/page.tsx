@@ -19,6 +19,10 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -67,6 +71,16 @@ export default function PayrollDashboardPage() {
     bankVerification: 94,
   };
 
+  const headcountByDept = data?.headcountByDept || [
+    { name: "Engineering", value: 45 },
+    { name: "Sales", value: 30 },
+    { name: "Product", value: 15 },
+    { name: "People", value: 8 },
+    { name: "Finance", value: 6 },
+  ];
+
+  const COLORS = ["#6366F1", "#818CF8", "#A5B4FC", "#C7D2FE", "#E0E7FF", "#4F46E5"];
+
   return (
     <>
       <div className="page-head">
@@ -109,15 +123,30 @@ export default function PayrollDashboardPage() {
         />
       </section>
 
-      <div className="two-col charts">
-        <section className="surface chart-card">
+      <style dangerouslySetInnerHTML={{__html: `
+        .charts-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 20px;
+          margin-bottom: 24px;
+        }
+        .chart-full {
+          grid-column: 1 / -1;
+        }
+        @media (max-width: 1000px) {
+          .charts-grid { grid-template-columns: 1fr; }
+        }
+      `}} />
+
+      <div className="charts-grid">
+        <section className="surface chart-card chart-full">
           <div className="section-title">
             <div>
               <h2>Payroll cost trend</h2>
               <p>Net payroll in lakhs</p>
             </div>
             <span className="trend up">
-              <ArrowUpRight size={13} /> 16.5%
+              <ArrowUpRight size={13} /> {chartSeries[chartSeries.length - 1]?.v > 0 ? "Active" : "Stable"}
             </span>
           </div>
           <ResponsiveContainer width="100%" height={245}>
@@ -147,7 +176,7 @@ export default function PayrollDashboardPage() {
           <div className="section-title">
             <div>
               <h2>Department cost</h2>
-              <p>Current payroll distribution</p>
+              <p>Current payroll distribution (Lakhs)</p>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={245}>
@@ -158,6 +187,35 @@ export default function PayrollDashboardPage() {
               <Tooltip />
               <Bar dataKey="v" fill="#818CF8" radius={[6, 6, 0, 0]} />
             </BarChart>
+          </ResponsiveContainer>
+        </section>
+
+        <section className="surface chart-card">
+          <div className="section-title">
+            <div>
+              <h2>Headcount distribution</h2>
+              <p>Active employees by department</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={245}>
+            <PieChart>
+              <Pie
+                data={headcountByDept}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={60}
+                outerRadius={80}
+                paddingAngle={5}
+              >
+                {headcountByDept.map((entry: any, index: number) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend verticalAlign="bottom" height={36} />
+            </PieChart>
           </ResponsiveContainer>
         </section>
       </div>

@@ -114,30 +114,67 @@ export async function GET(req: NextRequest) {
       detail: a.actor ? `${a.actor.firstName} ${a.actor.lastName}` : "System event",
     }));
 
+    // 7. Dynamic chart series from real payruns
+    const allPayruns = await prisma.payrun.findMany({
+      where: { deletedAt: null, status: "PAID" },
+      orderBy: { periodStart: "asc" },
+      select: { periodStart: true, totalNet: true },
+    });
+
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const chartMap = new Map<string, number>();
+    
+    // Default last 6 months (including current) to 0 if no data
+    const currentMonth = new Date().getMonth();
+    for (let i = 5; i >= 0; i--) {
+      let m = currentMonth - i;
+      if (m < 0) m += 12;
+      chartMap.set(monthNames[m], 0);
+    }
+
+    for (const pr of allPayruns) {
+      const monthLabel = monthNames[new Date(pr.periodStart).getMonth()];
+      if (chartMap.has(monthLabel)) {
+        chartMap.set(monthLabel, Number((Number(pr.totalNet) / 100000).toFixed(1)));
+      }
+    }
+    
+    // Add current month (even if draft)
+    chartMap.set(monthNames[currentMonth], Number((netPayrollThisMonth / 100000).toFixed(1)));
+
+    const chartSeries = Array.from(chartMap.entries()).map(([m, v]) => ({ m, v }));
+
+    // 8. Headcount by department for Pie Chart
+    const headcountByDept = departments.map(async (d) => {
+      // Approximate headcount via contracts or we can just count employees
+      const count = await prisma.employee.count({
+        where: { departmentId: d.id, deletedAt: null, status: "ACTIVE" }
+      });
+      return { name: d.name, value: count };
+    });
+    
+    // Resolve counts
+    const resolvedHeadcount = await Promise.all(headcountByDept);
+    const validHeadcount = resolvedHeadcount.filter(h => h.value > 0);
+
     return NextResponse.json({
       data: {
         kpis: {
-          totalEmployees: activeEmployees || 248,
+          totalEmployees: activeEmployees || 0,
           netPayrollThisMonth,
           totalGrossThisMonth,
-          avgGrossSalary: activeEmployees > 0 ? Math.round(totalGrossThisMonth / activeEmployees) : 84720,
+          avgGrossSalary: activeEmployees > 0 ? Math.round(totalGrossThisMonth / activeEmployees) : 0,
           pendingApprovals: pendingTimeOff,
           attendanceHealth: "96.8%",
         },
         health: {
           attendanceComplete: 96,
-          contractCoverage: Math.min(100, Math.max(90, contractCoverage)),
-          bankVerification: Math.min(100, Math.max(85, bankVerificationPct)),
+          contractCoverage: Math.min(100, Math.max(0, contractCoverage)),
+          bankVerification: Math.min(100, Math.max(0, bankVerificationPct)),
         },
-        chartSeries: [
-          { m: "Apr", v: 15.8 },
-          { m: "May", v: 16.2 },
-          { m: "Jun", v: 16.1 },
-          { m: "Jul", v: 17.3 },
-          { m: "Aug", v: 17.8 },
-          { m: "Sep", v: Number((netPayrollThisMonth / 100000).toFixed(1)) || 18.4 },
-        ],
+        chartSeries,
         departmentCost,
+        headcountByDept: validHeadcount,
         recentActivity: formattedActivity.length > 0 ? formattedActivity : [
           { id: "1", time: "11:24", title: "Finance approved September payrun review", detail: "Vikram Sethi" },
           { id: "2", time: "10:18", title: "Priya Shah requested time off", detail: "3 days · Earned leave" },

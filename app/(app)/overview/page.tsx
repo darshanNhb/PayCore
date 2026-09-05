@@ -40,23 +40,27 @@ export default function OverviewPage() {
 
   const activity = data?.recentActivity || [];
 
+  const activeRole = data?.user?.role || "EMPLOYEE";
+
   return (
     <>
       <div className="page-head">
         <div>
           <p className="eyebrow">FRIDAY, 18 SEPTEMBER 2026</p>
-          <h1>Good morning, Darshan</h1>
+          <h1>Good morning, {data?.user?.firstName || "there"}</h1>
           <p>
             September 2026 Payroll <span className="dot-sep">•</span> Processing
           </p>
         </div>
-        <Link
-          href="/payroll/payruns"
-          className="secondary"
-          style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
-        >
-          <WalletCards size={17} /> Open payrun
-        </Link>
+        {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+          <Link
+            href="/payroll/payruns"
+            className="secondary"
+            style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <WalletCards size={17} /> Open payrun
+          </Link>
+        )}
       </div>
 
       <section className="attention">
@@ -65,37 +69,45 @@ export default function OverviewPage() {
             <h2>Needs your attention</h2>
             <p>Resolve these before payroll can move forward.</p>
           </div>
-          <Link
-            href="/payroll/payruns"
-            className="text-button"
-            style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
-          >
-            View all <ChevronRight size={16} />
-          </Link>
+          {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+            <Link
+              href="/payroll/payruns"
+              className="text-button"
+              style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+            >
+              View all <ChevronRight size={16} />
+            </Link>
+          )}
         </div>
 
         <div className="attention-grid">
-          <SeverityCard
-            type="blocker"
-            title={`${data?.alerts?.missingBankCount || 2} employees missing bank details`}
-            description="Blocks payslip finalisation for September."
-            action="Review"
-            onClick={() => (window.location.href = "/employees")}
-          />
-          <SeverityCard
-            type="warning"
-            title="Duplicate payslip detected"
-            description="Aarav Mehta appears twice in September run."
-            action="Review"
-            onClick={() => (window.location.href = "/payroll/payslips")}
-          />
-          <SeverityCard
-            type="deadline"
-            title="Validate September payrun"
-            description="Validation is due in 10 days, by 28 Sep."
-            action="Open"
-            onClick={() => (window.location.href = "/payroll/payruns")}
-          />
+          {["ADMIN", "HR_MANAGER", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+            <SeverityCard
+              type="blocker"
+              title={`${data?.alerts?.missingBankCount || 2} employees missing bank details`}
+              description="Blocks payslip finalisation for September."
+              action="Review"
+              onClick={() => (window.location.href = "/employees")}
+            />
+          )}
+          {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+            <SeverityCard
+              type="warning"
+              title="Duplicate payslip detected"
+              description="Aarav Mehta appears twice in September run."
+              action="Review"
+              onClick={() => (window.location.href = "/payroll/payslips")}
+            />
+          )}
+          {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+            <SeverityCard
+              type="deadline"
+              title="Validate September payrun"
+              description="Validation is due in 10 days, by 28 Sep."
+              action="Open"
+              onClick={() => (window.location.href = "/payroll/payruns")}
+            />
+          )}
           <SeverityCard
             type="info"
             title="245 of 248 employees ready"
@@ -165,38 +177,44 @@ export default function OverviewPage() {
           <h2>Quick actions</h2>
           <p>Common payroll tasks, right where you need them.</p>
 
-          <Link
-            href="/employees"
-            className="quick-action"
-            style={{ textDecoration: "none" }}
-          >
-            <span>
-              <Plus size={17} /> New employee
-            </span>
-            <ChevronRight size={17} />
-          </Link>
+          {["ADMIN", "HR_MANAGER", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+            <Link
+              href="/employees"
+              className="quick-action"
+              style={{ textDecoration: "none" }}
+            >
+              <span>
+                <Plus size={17} /> New employee
+              </span>
+              <ChevronRight size={17} />
+            </Link>
+          )}
 
-          <Link
-            href="/payroll/payruns"
-            className="quick-action"
-            style={{ textDecoration: "none" }}
-          >
-            <span>
-              <Plus size={17} /> New payrun
-            </span>
-            <ChevronRight size={17} />
-          </Link>
+          {["ADMIN", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+            <Link
+              href="/payroll/payruns"
+              className="quick-action"
+              style={{ textDecoration: "none" }}
+            >
+              <span>
+                <Plus size={17} /> New payrun
+              </span>
+              <ChevronRight size={17} />
+            </Link>
+          )}
 
-          <Link
-            href="/time-off/requests"
-            className="quick-action"
-            style={{ textDecoration: "none" }}
-          >
-            <span>
-              <ShieldCheck size={17} /> Review approvals
-            </span>
-            <ChevronRight size={17} />
-          </Link>
+          {["ADMIN", "HR_MANAGER", "HR_PAYROLL_MANAGER", "HR_PAYROLL_USER"].includes(activeRole) && (
+            <Link
+              href="/time-off/requests"
+              className="quick-action"
+              style={{ textDecoration: "none" }}
+            >
+              <span>
+                <ShieldCheck size={17} /> Review approvals
+              </span>
+              <ChevronRight size={17} />
+            </Link>
+          )}
         </section>
       </div>
     </>
