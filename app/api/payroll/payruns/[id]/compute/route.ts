@@ -61,81 +61,103 @@ export async function POST(
       isProrated: r.isProrated,
     }));
 
-    await prisma.$transaction(async (tx) => {
-      for (const slip of payrun.payslips) {
-        const contractWage = slip.contract ? Number(slip.contract.wagePerMonth) : 0;
+    const payslipIds = payrun.payslips.map(s => s.id);
+    const employeeIds = payrun.payslips.map(s => s.employeeId);
 
-        // Check duplicate payslip in this same period across other payruns
-        const duplicateCount = await tx.payslip.count({
-          where: {
-            employeeId: slip.employeeId,
-            payrunId: { not: id },
-            status: { not: "CANCELLED" },
-            periodStart: { lte: payrun.periodEnd },
-            periodEnd: { gte: payrun.periodStart },
-          },
-        });
+    // 1. Fetch duplicate counts in bulk before transaction
+    const duplicatePayslips = await prisma.payslip.findMany({
+      where: {
+        employeeId: { in: employeeIds },
+        payrunId: { not: id },
+        status: { not: "CANCELLED" },
+        periodStart: { lte: payrun.periodEnd },
+        periodEnd: { gte: payrun.periodStart },
+      },
+      select: { employeeId: true }
+    });
+    const duplicateSet = new Set(duplicatePayslips.map(p => p.employeeId));
 
-        // Compute payroll through pure engine
-        const result = computeEmployeePayroll({
-          contractWage,
-          workedDays: Number(slip.workedDays),
-          totalWorkingDays: Number(slip.totalWorkingDays),
-          unpaidLeaveDays: Number(slip.unpaidLeaveDays),
-          rules,
-          employee: {
-            id: slip.employee.id,
-            name: `${slip.employee.firstName} ${slip.employee.lastName}`,
-            bankVerified: slip.employee.bankVerified,
-            hasBankDetails: Boolean(slip.employee.bankAccountNumberEncrypted),
-            hasWorkingSchedule: Boolean(slip.employee.workingScheduleId),
-          },
-          hasDuplicateInPeriod: duplicateCount > 0,
-        });
+    // 2. Compute all payrolls in memory synchronously
+    const allNewLines: any[] = [];
+    const allNewWarnings: any[] = [];
+    const payslipUpdates: any[] = [];
 
-        // Delete old lines & warnings
-        await tx.payslipLine.deleteMany({ where: { payslipId: slip.id } });
-        await tx.payslipWarning.deleteMany({ where: { payslipId: slip.id } });
+    for (const slip of payrun.payslips) {
+      const contractWage = slip.contract ? Number(slip.contract.wagePerMonth) : 0;
+      
+      const result = computeEmployeePayroll({
+        contractWage,
+        workedDays: Number(slip.workedDays),
+        totalWorkingDays: Number(slip.totalWorkingDays),
+        unpaidLeaveDays: Number(slip.unpaidLeaveDays),
+        overtimeHours: Number(slip.overtimeHours),
+        rules,
+        employee: {
+          id: slip.employee.id,
+          name: `${slip.employee.firstName} ${slip.employee.lastName}`,
+          bankVerified: slip.employee.bankVerified,
+          hasBankDetails: Boolean(slip.employee.bankAccountNumberEncrypted),
+          hasWorkingSchedule: Boolean(slip.employee.workingScheduleId),
+        },
+        hasDuplicateInPeriod: duplicateSet.has(slip.employeeId),
+      });
 
-        // Insert new lines
-        if (result.lines.length > 0) {
-          await tx.payslipLine.createMany({
-            data: result.lines.map((l) => ({
-              payslipId: slip.id,
-              salaryRuleId: l.salaryRuleId,
-              ruleCode: l.ruleCode,
-              ruleName: l.ruleName,
-              category: l.category as any,
-              sequence: l.sequence,
-              amount: l.amount,
-            })),
-          });
-        }
-
-        // Insert warnings
-        if (result.warnings.length > 0) {
-          await tx.payslipWarning.createMany({
-            data: result.warnings.map((w) => ({
-              payslipId: slip.id,
-              type: w.type,
-              message: w.message,
-              resolved: false,
-            })),
-          });
-        }
-
-        // Update payslip totals
-        await tx.payslip.update({
-          where: { id: slip.id },
-          data: {
-            grossAmount: result.grossAmount,
-            totalDeductions: result.totalDeductions,
-            netAmount: result.netAmount,
-            hasWarnings: result.warnings.length > 0,
-            status: "COMPUTED",
-          },
-        });
+      if (result.lines.length > 0) {
+        allNewLines.push(...result.lines.map(l => ({
+          payslipId: slip.id,
+          salaryRuleId: l.salaryRuleId,
+          ruleCode: l.ruleCode,
+          ruleName: l.ruleName,
+          category: l.category as any,
+          sequence: l.sequence,
+          amount: l.amount,
+        })));
       }
+
+      if (result.warnings.length > 0) {
+        allNewWarnings.push(...result.warnings.map(w => ({
+          payslipId: slip.id,
+          type: w.type,
+          message: w.message,
+          resolved: false,
+        })));
+      }
+
+      payslipUpdates.push({
+        id: slip.id,
+        data: {
+          grossAmount: result.grossAmount,
+          totalDeductions: result.totalDeductions,
+          netAmount: result.netAmount,
+          hasWarnings: result.warnings.length > 0,
+          status: "COMPUTED",
+        },
+      });
+    }
+
+    // 3. Batch execute in transaction
+    await prisma.$transaction(async (tx) => {
+      // Bulk delete old lines and warnings
+      await tx.payslipLine.deleteMany({ where: { payslipId: { in: payslipIds } } });
+      await tx.payslipWarning.deleteMany({ where: { payslipId: { in: payslipIds } } });
+
+      // Bulk insert new lines and warnings
+      if (allNewLines.length > 0) {
+        await tx.payslipLine.createMany({ data: allNewLines });
+      }
+      if (allNewWarnings.length > 0) {
+        await tx.payslipWarning.createMany({ data: allNewWarnings });
+      }
+
+      // Bulk update payslips using Promise.all (pipelines queries)
+      await Promise.all(
+        payslipUpdates.map(update => 
+          tx.payslip.update({
+            where: { id: update.id },
+            data: update.data
+          })
+        )
+      );
 
       // Update payrun status
       await tx.payrun.update({

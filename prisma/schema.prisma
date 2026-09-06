@@ -531,6 +531,7 @@ model TimeOffRequest {
   startDate       DateTime
   endDate         DateTime
   durationAmount  Decimal              @db.Decimal(6, 2) // days or hours
+  unpaidDays      Decimal              @default(0) @db.Decimal(6, 2)
   reason          String?
   status          TimeOffRequestStatus @default(TO_APPROVE)
   decidedByUserId String?
@@ -653,6 +654,7 @@ model Payslip {
   workedDays        Decimal       @default(0) @db.Decimal(6, 2)
   totalWorkingDays  Decimal       @default(0) @db.Decimal(6, 2)
   unpaidLeaveDays   Decimal       @default(0) @db.Decimal(6, 2)
+  overtimeHours     Decimal       @default(0) @db.Decimal(6, 2)
   status            PayslipStatus @default(DRAFT)
   grossAmount       Decimal       @default(0) @db.Decimal(12, 2)
   totalDeductions   Decimal       @default(0) @db.Decimal(12, 2)

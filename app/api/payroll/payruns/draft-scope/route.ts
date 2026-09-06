@@ -84,9 +84,11 @@ export async function POST(req: NextRequest) {
     if (error.statusCode === 403) {
       return NextResponse.json({ error: { code: "FORBIDDEN", message: error.message } }, { status: 403 });
     }
-    if (error.name === "ZodError") {
-      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: error.errors[0]?.message } }, { status: 400 });
+    if (error instanceof z.ZodError || error.name === "ZodError") {
+      const message = error.errors?.[0]?.message || error.issues?.[0]?.message || "Validation failed";
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message } }, { status: 400 });
     }
+    console.error("[Draft Scope Error]", error);
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: error.message } }, { status: 500 });
   }
 }

@@ -100,10 +100,12 @@ export async function POST(req: NextRequest) {
       include: { employee: true },
     });
 
-    const contractMap = new Map<string, string>();
-    for (const c of contracts) {
-      contractMap.set(c.employeeId, c.id);
-    }
+    const schedules = await prisma.workingSchedule.findMany({
+      include: { slots: true }
+    });
+    const scheduleMap = new Map(schedules.map(s => [s.id, s.slots]));
+
+    const contractMap = new Map(contracts.map((c) => [c.employeeId, c.id]));
 
     const payrun = await prisma.$transaction(async (tx) => {
       const pr = await tx.payrun.create({
@@ -120,24 +122,78 @@ export async function POST(req: NextRequest) {
       });
 
       // Build payslip data for all employees with running contracts
-      const payslipData = validated.employeeIds
-        .filter((empId) => contractMap.has(empId))
-        .map((empId) => ({
-          payrunId: pr.id,
-          employeeId: empId,
-          contractId: contractMap.get(empId)!,
-          salaryStructureId: validated.salaryStructureId,
-          periodStart,
-          periodEnd,
-          workedDays: 22,
-          totalWorkingDays: 22,
-          unpaidLeaveDays: 0,
-          grossAmount: 0,
-          totalDeductions: 0,
-          netAmount: 0,
-          status: "DRAFT" as const,
-          hasWarnings: false,
-        }));
+      const payslipData = await Promise.all(
+        validated.employeeIds
+          .filter((empId) => contractMap.has(empId))
+          .map(async (empId) => {
+            // Find approved time off requests overlapping this period
+            const timeOffs = await tx.timeOffRequest.findMany({
+              where: {
+                employeeId: empId,
+                status: "APPROVED",
+                startDate: { lte: periodEnd },
+                endDate: { gte: periodStart },
+              },
+            });
+
+            // Find attendance to calculate overtime
+            const attendances = await tx.attendanceRecord.findMany({
+              where: {
+                employeeId: empId,
+                checkIn: { gte: periodStart, lte: periodEnd },
+                workedMinutes: { not: null },
+              },
+              include: { employee: { select: { workingScheduleId: true } } }
+            });
+
+            let totalOvertimeMinutes = 0;
+            for (const att of attendances) {
+              const schedId = att.workingScheduleId || att.employee.workingScheduleId;
+              if (!schedId) continue;
+              const slots = scheduleMap.get(schedId);
+              if (!slots) continue;
+
+              const dayOfWeek = att.checkIn.getDay();
+              const slot = slots.find(s => s.dayOfWeek === dayOfWeek);
+              
+              let expectedMinutes = 0;
+              if (slot) {
+                const [startH, startM] = slot.startTime.split(':').map(Number);
+                const [endH, endM] = slot.endTime.split(':').map(Number);
+                expectedMinutes = (endH * 60 + endM) - (startH * 60 + startM) - slot.breakMinutes;
+              }
+
+              if (att.workedMinutes && att.workedMinutes > expectedMinutes) {
+                totalOvertimeMinutes += (att.workedMinutes - expectedMinutes);
+              }
+            }
+            const overtimeHours = Math.round((totalOvertimeMinutes / 60) * 100) / 100;
+
+            // Sum unpaid days
+            const unpaidLeaveDays = timeOffs.reduce((sum, req) => sum + Number(req.unpaidDays || 0), 0);
+            
+            const totalWorkingDays = 22;
+            const workedDays = Math.max(0, totalWorkingDays - unpaidLeaveDays);
+
+            return {
+              payrunId: pr.id,
+              employeeId: empId,
+              contractId: contractMap.get(empId)!,
+              salaryStructureId: validated.salaryStructureId,
+              periodStart,
+              periodEnd,
+              workedDays,
+              totalWorkingDays,
+              unpaidLeaveDays,
+              overtimeHours,
+              grossAmount: 0,
+              totalDeductions: 0,
+              netAmount: 0,
+              status: "DRAFT" as const,
+              hasWarnings: false,
+            };
+          })
+      );
 
       if (payslipData.length > 0) {
         await tx.payslip.createMany({ data: payslipData });
@@ -168,9 +224,11 @@ export async function POST(req: NextRequest) {
     if (error.statusCode === 403) {
       return NextResponse.json({ error: { code: "FORBIDDEN", message: error.message } }, { status: 403 });
     }
-    if (error.name === "ZodError") {
-      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: error.errors[0]?.message } }, { status: 400 });
+    if (error instanceof z.ZodError || error.name === "ZodError") {
+      const message = error.errors?.[0]?.message || error.issues?.[0]?.message || "Validation failed";
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message } }, { status: 400 });
     }
+    console.error("[Create Payrun Error]", error);
     return NextResponse.json({ error: { code: "SERVER_ERROR", message: error.message } }, { status: 500 });
   }
 }

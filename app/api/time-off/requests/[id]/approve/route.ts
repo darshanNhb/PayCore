@@ -30,6 +30,7 @@ export async function POST(
       }
 
       const duration = Number(request.durationAmount);
+      let unpaidDays = 0;
 
       // If this leave type requires allocation, validate balance and update
       if (request.timeOffType.requiresAllocation) {
@@ -51,13 +52,10 @@ export async function POST(
         }
 
         const remaining = Number(allocation.allocatedAmount) - Number(allocation.takenAmount);
-        if (remaining < duration) {
-          throw new Error(
-            `INSUFFICIENT_BALANCE: Insufficient balance: ${duration} requested, ${remaining} remaining`
-          );
-        }
+        unpaidDays = Math.max(0, duration - remaining);
 
         // Increment takenAmount
+
         await tx.timeOffAllocation.update({
           where: { id: allocation.id },
           data: {
@@ -75,6 +73,7 @@ export async function POST(
           decidedByUserId: session.userId,
           decidedAt: new Date(),
           decisionNote,
+          unpaidDays,
         },
         include: {
           employee: true,
