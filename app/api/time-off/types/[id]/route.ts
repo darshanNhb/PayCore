@@ -62,6 +62,15 @@ export async function DELETE(
     requirePermission(session.role, "time_off_type", "delete");
     const { id } = await params;
 
+    const existing = await prisma.timeOffType.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Time off type not found" } }, { status: 404 });
+    }
+    const pendingRequests = await prisma.timeOffRequest.count({ where: { timeOffTypeId: id, status: { in: ["TO_APPROVE", "APPROVED"] } } });
+    if (pendingRequests > 0) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Cannot archive a time off type that is being used in pending or approved requests." } }, { status: 400 });
+    }
+
     await prisma.timeOffType.update({
       where: { id },
       data: { status: "ARCHIVED" },

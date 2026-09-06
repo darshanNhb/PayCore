@@ -97,6 +97,16 @@ export async function DELETE(
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Department not found" } }, { status: 404 });
     }
 
+    const activeEmployees = await prisma.employee.count({ where: { departmentId: id, status: "ACTIVE", deletedAt: null } });
+    const activeContracts = await prisma.contract.count({ where: { departmentId: id, status: "RUNNING", deletedAt: null } });
+    
+    if (activeEmployees > 0 || activeContracts > 0) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Cannot delete a department that has active employees or running contracts." } }, 
+        { status: 400 }
+      );
+    }
+
     const softDeleted = await prisma.department.update({
       where: { id },
       data: { deletedAt: new Date() },

@@ -86,6 +86,16 @@ export async function PATCH(
 
     const updateData: any = { ...validated };
 
+    if (validated.status && (validated.status === "TERMINATED" || validated.status === "INACTIVE") && existing.status !== validated.status) {
+      const activeContracts = await prisma.contract.count({ where: { employeeId: id, status: "RUNNING", deletedAt: null } });
+      if (activeContracts > 0) {
+        return NextResponse.json(
+          { error: { code: "VALIDATION_ERROR", message: "Cannot terminate or deactivate an employee with an active running contract. Please end the contract first." } }, 
+          { status: 400 }
+        );
+      }
+    }
+
     if (validated.bankAccountNumber !== undefined) {
       updateData.bankAccountNumberEncrypted = validated.bankAccountNumber
         ? encryptField(validated.bankAccountNumber)

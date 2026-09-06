@@ -121,6 +121,16 @@ export async function DELETE(
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Working schedule not found" } }, { status: 404 });
     }
 
+    const activeEmployees = await prisma.employee.count({ where: { workingScheduleId: id, status: "ACTIVE", deletedAt: null } });
+    const activeContracts = await prisma.contract.count({ where: { workingScheduleId: id, status: "RUNNING", deletedAt: null } });
+
+    if (activeEmployees > 0 || activeContracts > 0) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Cannot archive a working schedule that is assigned to active employees or running contracts." } },
+        { status: 400 }
+      );
+    }
+
     const updated = await prisma.workingSchedule.update({
       where: { id },
       data: { status: "ARCHIVED" },

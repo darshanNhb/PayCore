@@ -12,11 +12,11 @@ export async function GET(req: NextRequest) {
     if (departmentId) employeeWhere.departmentId = departmentId;
 
     // 1. Employee stats
-    const [totalEmployees, activeEmployees, verifiedBankCount] = await Promise.all([
-      prisma.employee.count({ where: employeeWhere }),
-      prisma.employee.count({ where: { ...employeeWhere, status: "ACTIVE" } }),
-      prisma.employee.count({ where: { ...employeeWhere, bankVerified: true } }),
-    ]);
+    // const [totalEmployees, activeEmployees, verifiedBankCount] = await Promise.all([
+    //   prisma.employee.count({ where: employeeWhere }),
+    //   prisma.employee.count({ where: { ...employeeWhere, status: "ACTIVE" } }),
+    //   prisma.employee.count({ where: { ...employeeWhere, bankVerified: true } }),
+    // ]);
 
     // 2. Contracts & Running wage
     const runningContracts = await prisma.contract.findMany({

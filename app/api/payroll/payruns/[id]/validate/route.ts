@@ -35,6 +35,14 @@ export async function POST(
       );
     }
 
+    const hasWarnings = payrun.payslips.some(slip => slip.warnings.length > 0);
+    if (hasWarnings) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Cannot validate a payrun because one or more payslips have unresolved warnings." } },
+        { status: 400 }
+      );
+    }
+
     await prisma.$transaction([
       prisma.payslip.updateMany({
         where: { payrunId: id },

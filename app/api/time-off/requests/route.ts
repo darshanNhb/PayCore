@@ -110,6 +110,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (startDate < today) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Cannot request time off for past dates." } }, { status: 400 });
+    }
+
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+    if (!employee || employee.status !== "ACTIVE") {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Only active employees can request time off." } }, { status: 400 });
+    }
+
+    const overlapping = await prisma.timeOffRequest.findFirst({
+      where: {
+        employeeId,
+        status: { in: ["TO_APPROVE", "APPROVED"] },
+        startDate: { lte: endDate },
+        endDate: { gte: startDate }
+      }
+    });
+    if (overlapping) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "A time off request already exists for these dates." } }, { status: 400 });
+    }
+
     const type = await prisma.timeOffType.findUnique({
       where: { id: validated.timeOffTypeId },
     });

@@ -27,3 +27,8 @@ export async function verifyPassword(
 ): Promise<boolean> {
   return bcrypt.compare(plaintext, hash);
 }
+
+
+// Aaliyah
+
+// aaliyah.spinka@yahoo.com

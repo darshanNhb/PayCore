@@ -71,6 +71,15 @@ export async function DELETE(
     requirePermission(session.role, "salary_structure", "delete");
     const { id } = await params;
 
+    const existing = await prisma.salaryStructure.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Salary structure not found" } }, { status: 404 });
+    }
+    const runningContracts = await prisma.contract.count({ where: { salaryStructureId: id, status: "RUNNING", deletedAt: null } });
+    if (runningContracts > 0) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Cannot archive a salary structure that is being used in running contracts." } }, { status: 400 });
+    }
+
     await prisma.salaryStructure.update({
       where: { id },
       data: { status: "ARCHIVED" },

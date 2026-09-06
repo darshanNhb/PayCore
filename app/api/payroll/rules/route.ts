@@ -50,6 +50,23 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const validated = salaryRuleSchema.parse(body);
 
+    if (validated.computationMethod === "PERCENTAGE_OF_RULE") {
+      if (!validated.percentageOfRuleCode) {
+        return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Target rule code is required" } }, { status: 400 });
+      }
+      const targetRule = await prisma.salaryRule.findUnique({
+        where: {
+          salaryStructureId_code: {
+            salaryStructureId: validated.salaryStructureId,
+            code: validated.percentageOfRuleCode
+          }
+        }
+      });
+      if (!targetRule || targetRule.sequence >= validated.sequence) {
+        return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Target rule must exist in the same structure and have a lower sequence number." } }, { status: 400 });
+      }
+    }
+
     // If method is FORMULA, validate formula expression
     if (validated.computationMethod === "FORMULA") {
       if (!validated.formulaExpression) {

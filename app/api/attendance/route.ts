@@ -99,6 +99,14 @@ export async function POST(req: NextRequest) {
     const checkIn = new Date(validated.checkIn);
     const checkOut = validated.checkOut ? new Date(validated.checkOut) : null;
 
+    if (checkIn > new Date()) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Cannot log attendance for a future date" } }, { status: 400 });
+    }
+
+    if (checkOut && checkOut < checkIn) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Check-out time cannot be before check-in time" } }, { status: 400 });
+    }
+
     let workedMinutes: number | null = null;
     if (checkOut) {
       workedMinutes = Math.max(0, Math.round((checkOut.getTime() - checkIn.getTime()) / 60000));

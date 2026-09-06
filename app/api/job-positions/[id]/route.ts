@@ -96,6 +96,16 @@ export async function DELETE(
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Job position not found" } }, { status: 404 });
     }
 
+    const activeEmployees = await prisma.employee.count({ where: { jobPositionId: id, status: "ACTIVE", deletedAt: null } });
+    const activeContracts = await prisma.contract.count({ where: { jobPositionId: id, status: "RUNNING", deletedAt: null } });
+    
+    if (activeEmployees > 0 || activeContracts > 0) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "Cannot delete a job position that has active employees or running contracts." } }, 
+        { status: 400 }
+      );
+    }
+
     await prisma.jobPosition.delete({ where: { id } });
 
     await writeAuditLog({

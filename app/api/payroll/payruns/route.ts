@@ -195,12 +195,23 @@ export async function POST(req: NextRequest) {
           })
       );
 
-      if (payslipData.length > 0) {
-        await tx.payslip.createMany({ data: payslipData });
+      // Deduplicate by employeeId (in case same employee appears twice)
+      const seen = new Set<string>();
+      const uniquePayslipData = payslipData.filter(p => {
+        if (seen.has(p.employeeId)) return false;
+        seen.add(p.employeeId);
+        return true;
+      });
+
+      if (uniquePayslipData.length > 0) {
+        // Create payslips one-by-one to avoid createMany issues
+        for (const slip of uniquePayslipData) {
+          await tx.payslip.create({ data: slip });
+        }
       }
 
       return pr;
-    }, { timeout: 30000 });
+    }, { timeout: 60000 });
 
     await writeAuditLog({
       actorUserId: session.userId,
